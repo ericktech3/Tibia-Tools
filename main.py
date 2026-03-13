@@ -208,6 +208,16 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         self._fav_rendered_signature = None
         self._fav_refreshing = False
 
+        # Navegação/back (Android)
+        self._back_bound = False
+        self._last_back_press_ts = 0.0
+        self._nav_parent_map = {
+            "boss_favorites": "bosses",
+        }
+        self._nav_history = []
+        self._nav_current_route = None
+        self._nav_max_history = 64
+
     def build(self):
 
 
@@ -250,6 +260,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             Clock.schedule_once(lambda *_: self._safe_call(self._apply_settings_to_ui), 0)
             # (disabled) background monitor service auto-start for stability
             Clock.schedule_once(lambda *_: self._safe_call(self._set_initial_home_tab), 0)
+            Clock.schedule_once(lambda *_: self._safe_call(self._sync_nav_with_ui), 0.05)
             Clock.schedule_once(lambda *_: self._safe_call(self.dashboard_refresh), 0)
 
             Clock.schedule_once(lambda *_: self._safe_call(self.refresh_favorites_list, silent=True), 0)
@@ -261,6 +272,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
                 )
             Clock.schedule_once(lambda *_: self._safe_call(self.update_boosted), 0)
 
+        self._bind_android_back()
         return root
 
     def _safe_call(self, fn, *args, **kwargs):
@@ -304,6 +316,10 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         """Flush final e encerra o worker de disco."""
         try:
             try:
+                self._unbind_android_back()
+            except Exception:
+                pass
+            try:
                 self._disk_stop.set()
             except Exception:
                 pass
@@ -316,6 +332,165 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             self._flush_cache_to_disk(force=True)
         except Exception:
             pass
+
+    def _bind_android_back(self):
+        try:
+            if self._back_bound:
+                return
+            Window.bind(on_keyboard=self._on_window_keyboard)
+            self._back_bound = True
+        except Exception:
+            self._back_bound = False
+
+    def _unbind_android_back(self):
+        try:
+            if not self._back_bound:
+                return
+            Window.unbind(on_keyboard=self._on_window_keyboard)
+        except Exception:
+            pass
+        self._back_bound = False
+
+    def _get_current_screen_name(self) -> str:
+        try:
+            sm = self.root
+            if isinstance(sm, ScreenManager):
+                return str(sm.current or "")
+        except Exception:
+            pass
+        return ""
+
+    def _get_current_home_tab(self) -> str:
+        try:
+            sm = self.root
+            if not isinstance(sm, ScreenManager) or "home" not in sm.screen_names:
+                return ""
+            home = sm.get_screen("home")
+            bottom_nav = home.ids.get("bottom_nav")
+            if bottom_nav is None:
+                return ""
+            return str(getattr(bottom_nav, "current", "") or "")
+        except Exception:
+            return ""
+
+    def _normalize_home_tab(self, tab_name: str) -> str:
+        tab = str(tab_name or "").strip()
+        return tab or "tab_dashboard"
+
+    def _make_route(self, screen_name: str, tab_name: Optional[str] = None):
+        screen = str(screen_name or "").strip() or "home"
+        if screen == "home":
+            return ("home", self._normalize_home_tab(tab_name or self._get_current_home_tab()))
+        return (screen, "")
+
+    def _get_current_route(self):
+        current = self._get_current_screen_name() or "home"
+        if current == "home":
+            return self._make_route("home", self._get_current_home_tab())
+        return self._make_route(current)
+
+    def _push_history_entry(self, route) -> None:
+        if not route:
+            return
+        hist = getattr(self, "_nav_history", None)
+        if hist is None:
+            self._nav_history = []
+            hist = self._nav_history
+        if hist and hist[-1] == route:
+            return
+        hist.append(route)
+        max_items = int(getattr(self, "_nav_max_history", 64) or 64)
+        if max_items > 0 and len(hist) > max_items:
+            del hist[:-max_items]
+
+    def _remember_current_route_before(self, next_route) -> None:
+        current = getattr(self, "_nav_current_route", None) or self._get_current_route()
+        if current and current != next_route:
+            self._push_history_entry(current)
+
+    def _sync_nav_with_ui(self, *_args) -> None:
+        self._nav_current_route = self._get_current_route()
+
+    def _set_screen_current(self, screen_name: str) -> bool:
+        sm = self.root
+        if isinstance(sm, ScreenManager) and screen_name in sm.screen_names:
+            sm.current = screen_name
+            return True
+        return False
+
+    def _set_home_tab_current(self, tab_name: str) -> bool:
+        try:
+            home = self.root.get_screen("home")
+            bottom_nav = home.ids.get("bottom_nav")
+            if bottom_nav is None:
+                return False
+            tab = self._normalize_home_tab(tab_name)
+            if hasattr(bottom_nav, "switch_tab"):
+                bottom_nav.switch_tab(tab)
+            else:
+                bottom_nav.current = tab
+            return True
+        except Exception:
+            return False
+
+    def _navigate_to_route(self, route, *, record: bool = True) -> bool:
+        if not route:
+            return False
+        screen_name, tab_name = route
+        target = self._make_route(screen_name, tab_name)
+        if record:
+            self._remember_current_route_before(target)
+
+        changed = False
+        if target[0] == "home":
+            changed = self._set_screen_current("home") or changed
+            changed = self._set_home_tab_current(target[1]) or changed
+        else:
+            changed = self._set_screen_current(target[0]) or changed
+
+        if changed:
+            self._nav_current_route = target
+        return changed
+
+    def _go_home_dashboard(self, *, record: bool = True):
+        self._navigate_to_route(self._make_route("home", "tab_dashboard"), record=record)
+
+    def _pop_nav_history(self):
+        hist = getattr(self, "_nav_history", None) or []
+        while hist:
+            route = hist.pop()
+            if route and route != (getattr(self, "_nav_current_route", None) or self._get_current_route()):
+                return route
+        return None
+
+    def navigate_back(self, *_args) -> bool:
+        route = self._pop_nav_history()
+        if route:
+            return bool(self._navigate_to_route(route, record=False))
+        return False
+
+    def _handle_back_navigation(self) -> bool:
+        if self.navigate_back():
+            return True
+
+        now = time.monotonic()
+        if (now - float(getattr(self, "_last_back_press_ts", 0.0) or 0.0)) < 2.0:
+            return False
+
+        self._last_back_press_ts = now
+        try:
+            self.toast("Pressione voltar novamente para sair")
+        except Exception:
+            pass
+        return True
+
+    def _on_window_keyboard(self, _window, key, *_args):
+        try:
+            if key not in (27, 1001):
+                return False
+            return bool(self._handle_back_navigation())
+        except Exception:
+            return False
 
     # --------------------
     # Deep-link / Notification click handling (Android)
@@ -451,13 +626,16 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         except Exception:
             pass
 
-    def go(self, screen_name: str):
-        sm = self.root
-        if isinstance(sm, ScreenManager) and screen_name in sm.screen_names:
-            sm.current = screen_name
+    def go(self, screen_name: str, *, record: bool = True):
+        if screen_name == "home":
+            current_tab = self._get_current_home_tab() or "tab_dashboard"
+            self._navigate_to_route(self._make_route("home", current_tab), record=record)
+            return
+        self._navigate_to_route(self._make_route(screen_name), record=record)
 
     def back_home(self, *_):
-        self.go("home")
+        if not self.navigate_back():
+            self._go_home_dashboard(record=True)
 
 
     def open_boosted_from_home(self, which: str = ""):
@@ -466,7 +644,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         which: "creature" | "boss" | "" (opcional, apenas para futuras melhorias).
         """
         try:
-            self.root.current = "boosted"
+            self.go("boosted")
         except Exception:
             return
 
@@ -477,14 +655,9 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             pass
 
 
-    def select_home_tab(self, tab_name: str):
+    def select_home_tab(self, tab_name: str, *, record: bool = True):
         """Seleciona uma aba dentro da HomeScreen (BottomNavigation)."""
-        try:
-            home = self.root.get_screen("home")
-            if "bottom_nav" in home.ids:
-                home.ids.bottom_nav.switch_tab(tab_name)
-        except Exception:
-            pass
+        self._navigate_to_route(self._make_route("home", tab_name), record=record)
 
     def open_more_target(self, target: str):
         # Itens que abrem dialog/ações, não telas
@@ -1045,7 +1218,8 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
 
     def _set_initial_home_tab(self, *_):
         # abre direto no Dashboard
-        self.select_home_tab("tab_dashboard")
+        self.select_home_tab("tab_dashboard", record=False)
+        self._sync_nav_with_ui()
 
 
     def toast(self, message: str):

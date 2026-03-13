@@ -351,19 +351,16 @@ class FavoritesControllerMixin:
 
     def _open_fav_in_app(self, name: str) -> None:
         self._dismiss_fav_menu()
+        try:
+            if hasattr(self, "select_home_tab"):
+                self.select_home_tab("tab_char")
+        except Exception:
+            log_current_exception(prefix="[fav] falha ao trocar para aba Char")
+
         home = self._get_home_screen()
         if home is None:
             return
         ids = self._get_home_ids(home)
-        nav = ids.get("bottom_nav") if hasattr(ids, "get") else None
-        if nav is not None:
-            try:
-                if hasattr(nav, "switch_tab"):
-                    nav.switch_tab("tab_char")
-                else:
-                    nav.current = "tab_char"
-            except Exception:
-                log_current_exception(prefix="[fav] falha ao trocar para aba Char")
         char_name = ids.get("char_name") if hasattr(ids, "get") else None
         if char_name is not None:
             char_name.text = name
