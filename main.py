@@ -338,6 +338,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             if self._back_bound:
                 return
             Window.bind(on_keyboard=self._on_window_keyboard)
+            Window.bind(on_request_close=self._on_window_request_close)
             self._back_bound = True
         except Exception:
             self._back_bound = False
@@ -347,6 +348,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             if not self._back_bound:
                 return
             Window.unbind(on_keyboard=self._on_window_keyboard)
+            Window.unbind(on_request_close=self._on_window_request_close)
         except Exception:
             pass
         self._back_bound = False
@@ -484,10 +486,32 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             pass
         return True
 
+    def _is_duplicate_back_event(self) -> bool:
+        try:
+            now = time.monotonic()
+            last = float(getattr(self, "_last_back_event_ts", 0.0) or 0.0)
+            guard = float(getattr(self, "_back_event_guard_s", 0.35) or 0.35)
+            if (now - last) < guard:
+                return True
+            self._last_back_event_ts = now
+            return False
+        except Exception:
+            return False
+
     def _on_window_keyboard(self, _window, key, *_args):
         try:
             if key not in (27, 1001):
                 return False
+            if self._is_duplicate_back_event():
+                return True
+            return bool(self._handle_back_navigation())
+        except Exception:
+            return False
+
+    def _on_window_request_close(self, *_args):
+        try:
+            if self._is_duplicate_back_event():
+                return True
             return bool(self._handle_back_navigation())
         except Exception:
             return False
