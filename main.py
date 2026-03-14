@@ -7,6 +7,14 @@ Mais -> telas internas: Bosses (ExevoPan), Boosted, Treino (Exercise), Imbuement
 """
 from __future__ import annotations
 
+try:
+    from kivy.config import Config
+    # Impede que o Kivy trate Back/Escape como fechamento automático do app.
+    # No Android isso é essencial para que o botão/gesto Voltar passe pela navegação interna.
+    Config.set("kivy", "exit_on_escape", "0")
+except Exception:
+    Config = None
+
 import os
 import sys
 import json
