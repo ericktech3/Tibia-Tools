@@ -121,6 +121,13 @@ _install_kivy_stubs()
 from main import TibiaToolsApp
 
 
+class _DummyTextInput:
+    def __init__(self, focused=True):
+        self.focus = focused
+        self.multiline = False
+        self.children = []
+
+
 class BackNavigationEventsTests(unittest.TestCase):
     def make_app(self):
         app = TibiaToolsApp()
@@ -157,6 +164,20 @@ class BackNavigationEventsTests(unittest.TestCase):
         self.assertTrue(first)
         self.assertTrue(second)
         self.assertEqual(app.toast_messages, ["Pressione voltar novamente para sair"])
+
+    def test_back_dismisses_focused_text_input_before_navigation(self):
+        app = self.make_app()
+        text_input = _DummyTextInput(focused=True)
+        app.root = SimpleNamespace(children=[text_input])
+        navigate_calls = []
+        app.navigate_back = lambda *args: navigate_calls.append(True) or False
+
+        handled = app._on_window_keyboard(None, 27)
+
+        self.assertTrue(handled)
+        self.assertFalse(text_input.focus)
+        self.assertEqual(navigate_calls, [])
+        self.assertEqual(app.toast_messages, [])
 
 
 if __name__ == "__main__":
