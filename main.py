@@ -226,6 +226,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         self._nav_history = []
         self._nav_current_route = None
         self._nav_max_history = 64
+        self._suppress_home_tab_event = False
 
     def build(self):
 
@@ -434,6 +435,9 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             return True
         return False
 
+    def _clear_home_tab_event_suppression(self, *_args):
+        self._suppress_home_tab_event = False
+
     def _set_home_tab_current(self, tab_name: str) -> bool:
         try:
             home = self.root.get_screen("home")
@@ -441,13 +445,28 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             if bottom_nav is None:
                 return False
             tab = self._normalize_home_tab(tab_name)
+            self._suppress_home_tab_event = True
             if hasattr(bottom_nav, "switch_tab"):
                 bottom_nav.switch_tab(tab)
             else:
                 bottom_nav.current = tab
+            Clock.schedule_once(self._clear_home_tab_event_suppression, 0)
             return True
         except Exception:
+            self._suppress_home_tab_event = False
             return False
+
+    def on_home_tab_selected(self, tab_name: str, *_args):
+        target = self._make_route("home", tab_name)
+        current = getattr(self, "_nav_current_route", None) or self._get_current_route()
+
+        if getattr(self, "_suppress_home_tab_event", False):
+            self._nav_current_route = target
+            return
+
+        if current != target:
+            self._push_history_entry(current)
+        self._nav_current_route = target
 
     def _navigate_to_route(self, route, *, record: bool = True) -> bool:
         if not route:

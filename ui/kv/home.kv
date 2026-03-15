@@ -17,6 +17,7 @@
                 name: "tab_dashboard"
                 text: "Home"
                 icon: "home"
+                on_tab_release: app.on_home_tab_selected(self.name)
 
                 MDScrollView:
                     do_scroll_x: False
@@ -186,6 +187,7 @@
                 name: "tab_char"
                 text: "Char"
                 icon: "account-search"
+                on_tab_release: app.on_home_tab_selected(self.name)
 
                 MDScrollView:
                     do_scroll_x: False
@@ -503,6 +505,7 @@
                 name: "tab_more"
                 text: "Mais"
                 icon: "dots-horizontal"
+                on_tab_release: app.on_home_tab_selected(self.name)
 
                 MDScrollView:
                     do_scroll_x: False
