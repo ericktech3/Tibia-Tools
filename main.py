@@ -30,6 +30,7 @@ from urllib.parse import quote
 from typing import List, Optional
 
 from kivy.core.clipboard import Clipboard
+from kivy.core.window import Window
 from kivy.lang import Builder
 from kivy.clock import Clock
 from kivy.metrics import dp
@@ -351,6 +352,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             Window.bind(on_request_close=self._on_window_request_close)
             self._back_bound = True
         except Exception:
+            log_current_exception()
             self._back_bound = False
 
     def _unbind_android_back(self):
@@ -362,7 +364,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             Window.unbind(on_key_up=self._on_window_key_up)
             Window.unbind(on_request_close=self._on_window_request_close)
         except Exception:
-            pass
+            log_current_exception()
         self._back_bound = False
 
     def _get_current_screen_name(self) -> str:
