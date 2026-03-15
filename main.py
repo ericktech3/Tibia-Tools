@@ -542,7 +542,55 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             scan_i = scancode
         return key_i in (4, 27, 1001) or scan_i in (4, 27)
 
+    def _iter_widget_tree(self, root_widget):
+        stack = [root_widget]
+        seen = set()
+        while stack:
+            widget = stack.pop()
+            ident = id(widget)
+            if ident in seen:
+                continue
+            seen.add(ident)
+            yield widget
+            try:
+                children = list(getattr(widget, "children", None) or [])
+            except Exception:
+                children = []
+            stack.extend(children)
+
+    def _is_text_input_widget(self, widget) -> bool:
+        if widget is None:
+            return False
+        name = type(widget).__name__.lower()
+        if "textinput" in name or "textfield" in name:
+            return True
+        return hasattr(widget, "focus") and (hasattr(widget, "input_filter") or hasattr(widget, "multiline"))
+
+    def _get_focused_text_input(self):
+        root = getattr(self, "root", None)
+        if root is None:
+            return None
+        try:
+            for widget in self._iter_widget_tree(root):
+                if getattr(widget, "focus", False) and self._is_text_input_widget(widget):
+                    return widget
+        except Exception:
+            return None
+        return None
+
+    def _dismiss_focused_text_input(self) -> bool:
+        widget = self._get_focused_text_input()
+        if widget is None:
+            return False
+        try:
+            widget.focus = False
+            return True
+        except Exception:
+            return False
+
     def _dispatch_android_back(self) -> bool:
+        if self._dismiss_focused_text_input():
+            return True
         if self._is_duplicate_back_event():
             return True
         return bool(self._handle_back_navigation())
