@@ -135,6 +135,20 @@ class BackNavigationEventsTests(unittest.TestCase):
         self.assertTrue(handled)
         self.assertEqual(app.toast_messages, ["Pressione voltar novamente para sair"])
 
+    def test_android_back_keycode_4_is_consumed(self):
+        app = self.make_app()
+        app.navigate_back = lambda *args: False
+        handled = app._on_window_keyboard(None, 4)
+        self.assertTrue(handled)
+        self.assertEqual(app.toast_messages, ["Pressione voltar novamente para sair"])
+
+    def test_android_back_scancode_4_is_consumed_on_key_down(self):
+        app = self.make_app()
+        app.navigate_back = lambda *args: False
+        handled = app._on_window_key_down(None, 999, 4)
+        self.assertTrue(handled)
+        self.assertEqual(app.toast_messages, ["Pressione voltar novamente para sair"])
+
     def test_duplicate_keyboard_then_request_close_does_not_exit(self):
         app = self.make_app()
         app.navigate_back = lambda *args: False
