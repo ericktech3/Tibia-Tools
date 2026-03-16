@@ -536,11 +536,10 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             key_i = None if key is None else int(key)
         except Exception:
             key_i = key
-        try:
-            scan_i = None if scancode is None else int(scancode)
-        except Exception:
-            scan_i = scancode
-        return key_i in (4, 27, 1001) or scan_i in (4, 27)
+        # Importante: nao tratar scancode como back.
+        # Em SDL/Kivy, scancode 4 e 27 podem corresponder a teclas normais
+        # como 'a' e 'x', o que fazia o teclado fechar ao digitar.
+        return key_i in (4, 27, 1001)
 
     def _iter_widget_tree(self, root_widget):
         stack = [root_widget]
