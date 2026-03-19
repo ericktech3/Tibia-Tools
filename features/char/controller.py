@@ -74,9 +74,13 @@ class CharControllerMixin:
 
     def _format_stalker_secondary(self, row: dict) -> str:
         bits = []
-        score_text = str(row.get("score_text") or "").strip()
-        if score_text:
-            bits.append(f"Score {score_text}")
+        chance_text = str(row.get("chance_text") or "").strip()
+        if chance_text:
+            bits.append(f"Chance {chance_text}")
+        else:
+            score_text = str(row.get("score_text") or "").strip()
+            if score_text:
+                bits.append(f"Score {score_text}")
         world = str(row.get("world") or "").strip()
         if world:
             bits.append(world)

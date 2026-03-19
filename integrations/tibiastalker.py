@@ -61,6 +61,45 @@ def _to_float(value: Any) -> Optional[float]:
         return None
 
 
+def _format_percent_text(value: Optional[float]) -> str:
+    if value is None:
+        return ''
+    try:
+        pct = float(value)
+    except (TypeError, ValueError):
+        return ''
+    if pct < 0:
+        return ''
+    if 0 <= pct <= 1:
+        pct *= 100.0
+    elif pct > 100:
+        return ''
+    rounded = round(pct, 1)
+    if abs(rounded - round(rounded)) < 1e-9:
+        return f'{int(round(rounded))}%'
+    return f'{rounded:.1f}%'
+
+
+def _find_likely_score(item: dict) -> Optional[float]:
+    for key in (
+        'score', 'probability', 'confidence', 'points', 'matchScore', 'rankScore',
+        'percentage', 'percent', 'chance', 'likelihood', 'probabilityPercentage',
+        'probabilityPercent', 'percentChance', 'chancePercent', 'chancePercentage',
+    ):
+        value = _to_float(item.get(key))
+        if value is not None:
+            return value
+
+    for key, raw_value in item.items():
+        key_l = str(key).strip().lower()
+        if not any(tok in key_l for tok in ('score', 'prob', 'conf', 'percent', 'chance', 'likely')):
+            continue
+        value = _to_float(raw_value)
+        if value is not None:
+            return value
+    return None
+
+
 def _candidate_from_item(item: Any) -> Optional[Dict[str, Any]]:
     if isinstance(item, str) and item.strip():
         return {
@@ -85,11 +124,7 @@ def _candidate_from_item(item: Any) -> Optional[Dict[str, Any]]:
     if not name:
         return None
 
-    score = None
-    for key in ('score', 'probability', 'confidence', 'points', 'matchScore', 'rankScore'):
-        score = _to_float(item.get(key))
-        if score is not None:
-            break
+    score = _find_likely_score(item)
 
     world = _first_non_empty_str(item, ('world', 'server'))
     vocation = _first_non_empty_str(item, ('vocation', 'voc'))
@@ -103,11 +138,13 @@ def _candidate_from_item(item: Any) -> Optional[Dict[str, Any]]:
     score_text = ''
     if score is not None:
         score_text = f'{int(score)}' if abs(score - int(score)) < 1e-9 else f'{score:.1f}'
+    chance_text = _format_percent_text(score)
 
     return {
         'name': name,
         'score': score,
         'score_text': score_text,
+        'chance_text': chance_text,
         'world': world,
         'level': level,
         'vocation': vocation,
