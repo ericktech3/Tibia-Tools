@@ -10,8 +10,14 @@ from datetime import datetime, timedelta
 import requests
 from kivy.clock import Clock
 from kivy.metrics import dp
+from kivy.uix.behaviors import ButtonBehavior
+from kivy.uix.widget import Widget
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.label import MDIcon, MDLabel
 from kivymd.uix.list import OneLineIconListItem, TwoLineIconListItem, IconLeftWidget
 from kivymd.uix.menu import MDDropdownMenu
+from kivymd.uix.progressbar import MDProgressBar
+from kivymd.uix.widget import MDWidget
 
 from integrations.tibiadata import (
     fetch_character_tibiadata,
@@ -26,6 +32,10 @@ from integrations.tibiastalker import (
 )
 from core.exp_loss import estimate_death_exp_lost
 from services.error_reporting import log_current_exception
+
+
+class _StalkerCandidateItem(ButtonBehavior, MDBoxLayout):
+    pass
 
 
 class CharControllerMixin:
@@ -72,19 +82,55 @@ class CharControllerMixin:
     def _favorite_names_set(self) -> set[str]:
         return {str(x).strip().lower() for x in (getattr(self, "favorites", []) or []) if str(x).strip()}
 
+    def _stalker_percent_value(self, row: dict):
+        value = row.get("display_percent")
+        try:
+            if value is None:
+                value = row.get("score")
+            if value is None:
+                value = row.get("estimated_index")
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        if 0 <= value <= 1:
+            value *= 100.0
+        return max(0.0, min(100.0, value))
+
+    def _stalker_confidence_label(self, row: dict) -> str:
+        label = str(row.get("confidence_label") or "").strip()
+        if label:
+            return label
+        value = self._stalker_percent_value(row)
+        if value is None:
+            return ""
+        if value >= 80:
+            return "Alta confiança"
+        if value >= 50:
+            return "Média confiança"
+        if value > 0:
+            return "Baixa confiança"
+        return ""
+
     def _format_stalker_secondary(self, row: dict) -> str:
         bits = []
         chance_text = str(row.get("chance_text") or "").strip()
         estimated_index_text = str(row.get("estimated_index_text") or "").strip()
+        display_percent_text = str(row.get("display_percent_text") or "").strip()
+        confidence_label = self._stalker_confidence_label(row)
         if chance_text:
             bits.append(f"Chance {chance_text}")
         elif estimated_index_text:
             bits.append(f"Índice estimado {estimated_index_text}")
+        elif display_percent_text:
+            bits.append(f"Índice {display_percent_text}")
+
+        if confidence_label:
+            bits.append(confidence_label)
 
         matches_text = str(row.get("matches_text") or "").strip()
         if matches_text:
             bits.append(matches_text)
-        elif not chance_text and not estimated_index_text:
+        elif not chance_text and not estimated_index_text and not display_percent_text:
             score_text = str(row.get("score_text") or "").strip()
             if score_text:
                 bits.append(f"Score {score_text}")
@@ -104,6 +150,99 @@ class CharControllerMixin:
         if first_match_date and not last_match_date:
             bits.append(f"primeira {first_match_date}")
         return " • ".join(bits) if bits else "Toque para abrir no app"
+
+    def _build_stalker_candidate_widget(self, row: dict):
+        nm = str(row.get("name") or "").strip()
+        if not nm:
+            return None
+
+        percent = self._stalker_percent_value(row)
+        percent_text = str(row.get("display_percent_text") or "").strip()
+        if not percent_text and percent is not None:
+            rounded = round(percent, 1)
+            percent_text = f"{int(rounded)}%" if abs(rounded - round(rounded)) < 1e-9 else f"{rounded:.1f}%"
+        confidence_label = self._stalker_confidence_label(row)
+
+        top_meta = []
+        if percent_text:
+            if str(row.get("chance_text") or "").strip():
+                top_meta.append(f"Chance {percent_text}")
+            else:
+                top_meta.append(f"Índice estimado {percent_text}")
+        if confidence_label:
+            top_meta.append(confidence_label)
+
+        bottom_meta = []
+        matches_text = str(row.get("matches_text") or "").strip()
+        if matches_text:
+            bottom_meta.append(matches_text)
+        last_match_date = str(row.get("last_match_date") or "").strip()
+        if last_match_date:
+            bottom_meta.append(f"última {last_match_date}")
+        world = str(row.get("world") or "").strip()
+        if world:
+            bottom_meta.append(world)
+        level = row.get("level")
+        if isinstance(level, int):
+            bottom_meta.append(f"lvl {level}")
+        vocation = str(row.get("vocation") or "").strip()
+        if vocation:
+            bottom_meta.append(vocation)
+
+        item = _StalkerCandidateItem(
+            orientation="vertical",
+            size_hint_y=None,
+            padding=(dp(16), dp(10), dp(16), dp(10)),
+            spacing=dp(6),
+        )
+        item.bind(minimum_height=item.setter("height"))
+        item.bind(on_release=lambda *_: self.open_char_from_stalker_list(nm))
+
+        header = MDBoxLayout(size_hint_y=None, height=dp(26), spacing=dp(10))
+        header.add_widget(MDIcon(icon="account-search", size_hint=(None, None), size=(dp(24), dp(24)), pos_hint={"center_y": 0.5}))
+
+        title_box = MDBoxLayout(orientation="vertical")
+        title_box.add_widget(MDLabel(text=nm, font_style="Body1", bold=True, shorten=True, shorten_from="right", size_hint_y=None, height=dp(24)))
+        header.add_widget(title_box)
+
+        right_text = confidence_label or (percent_text if percent_text else "")
+        header.add_widget(MDLabel(
+            text=right_text,
+            halign="right",
+            theme_text_color="Secondary",
+            size_hint_x=None,
+            width=dp(120),
+            font_style="Caption",
+        ))
+        item.add_widget(header)
+
+        subtitle_parts = []
+        if top_meta:
+            subtitle_parts.append(" • ".join(top_meta))
+        if bottom_meta:
+            subtitle_parts.append(" • ".join(bottom_meta))
+        subtitle = "\n".join(subtitle_parts).strip() or "Toque para abrir no app"
+        item.add_widget(MDLabel(
+            text=subtitle,
+            theme_text_color="Secondary",
+            size_hint_y=None,
+            adaptive_height=True,
+        ))
+
+        progress_row = MDBoxLayout(size_hint_y=None, height=dp(18), spacing=dp(8))
+        bar = MDProgressBar(value=percent or 0.0, max=100, size_hint_y=None, height=dp(6))
+        progress_row.add_widget(bar)
+        progress_row.add_widget(MDLabel(
+            text=percent_text or "—",
+            size_hint_x=None,
+            width=dp(52),
+            halign="right",
+            theme_text_color="Secondary",
+            font_style="Caption",
+        ))
+        item.add_widget(progress_row)
+        item.add_widget(MDWidget(size_hint_y=None, height=dp(2)))
+        return item
 
     def open_char_from_stalker_list(self, name: str):
         self.open_char_from_account_list(name)
@@ -623,14 +762,10 @@ class CharControllerMixin:
                         for row in stalker_rows[:10]:
                             if not isinstance(row, dict):
                                 continue
-                            nm = str(row.get("name") or "").strip()
-                            if not nm:
+                            widget = self._build_stalker_candidate_widget(row)
+                            if widget is None:
                                 continue
-                            sec = self._format_stalker_secondary(row)
-                            it = TwoLineIconListItem(text=nm, secondary_text=sec or " ")
-                            it.add_widget(IconLeftWidget(icon="account-search"))
-                            it.bind(on_release=lambda *_ , nn=nm: self.open_char_from_stalker_list(nn))
-                            s_list.add_widget(it)
+                            s_list.add_widget(widget)
                     else:
                         txt = stalker_error or "Sem sugestões para este personagem no Tibia Stalker."
                         item = OneLineIconListItem(text=txt)

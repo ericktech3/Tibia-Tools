@@ -117,6 +117,43 @@ def _format_estimated_index_text(value: Optional[float]) -> str:
     return pct if pct else ''
 
 
+def _display_percent_value(row: Dict[str, Any]) -> Optional[float]:
+    value = row.get('score')
+    if value is None:
+        value = row.get('estimated_index')
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    if 0 <= value <= 1:
+        value *= 100.0
+    return max(0.0, min(100.0, value))
+
+
+def _confidence_bucket(value: Optional[float]) -> str:
+    try:
+        pct = float(value)
+    except (TypeError, ValueError):
+        return ''
+    if 0 <= pct <= 1:
+        pct *= 100.0
+    if pct >= 80:
+        return 'Alta confiança'
+    if pct >= 50:
+        return 'Média confiança'
+    if pct > 0:
+        return 'Baixa confiança'
+    return ''
+
+
+def _annotate_display_confidence(rows: List[Dict[str, Any]]) -> None:
+    for row in rows:
+        pct = _display_percent_value(row)
+        row['display_percent'] = pct
+        row['display_percent_text'] = _format_percent_text(pct)
+        row['confidence_label'] = _confidence_bucket(pct)
+
+
 def _compute_estimated_index(rows: List[Dict[str, Any]]) -> None:
     if not rows:
         return
@@ -337,6 +374,7 @@ def extract_stalker_candidates(data: Dict[str, Any], target_name: str = '', limi
 
     rows = list(dedup.values())
     _compute_estimated_index(rows)
+    _annotate_display_confidence(rows)
 
     ordered = sorted(
         rows,
