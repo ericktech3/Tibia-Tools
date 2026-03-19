@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from math import log1p
+from math import exp
 from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import quote
 
@@ -113,8 +113,17 @@ def _parse_date_loose(value: Any) -> Optional[date]:
 
 
 def _format_estimated_index_text(value: Optional[float]) -> str:
-    pct = _format_percent_text(value)
-    return pct if pct else ''
+    if value is None:
+        return ''
+    try:
+        pct = float(value)
+    except (TypeError, ValueError):
+        return ''
+    if 0 <= pct <= 1:
+        pct *= 100.0
+    if pct < 0:
+        return ''
+    return f"{int(round(max(0.0, min(100.0, pct))))}%"
 
 
 def _display_percent_value(row: Dict[str, Any]) -> Optional[float]:
@@ -137,12 +146,12 @@ def _confidence_bucket(value: Optional[float]) -> str:
         return ''
     if 0 <= pct <= 1:
         pct *= 100.0
-    if pct >= 80:
-        return 'Alta confiança'
-    if pct >= 50:
-        return 'Média confiança'
+    if pct >= 75:
+        return 'VERY HIGH'
+    if pct >= 20:
+        return 'MEDIUM'
     if pct > 0:
-        return 'Baixa confiança'
+        return 'LOW'
     return ''
 
 
@@ -150,7 +159,10 @@ def _annotate_display_confidence(rows: List[Dict[str, Any]]) -> None:
     for row in rows:
         pct = _display_percent_value(row)
         row['display_percent'] = pct
-        row['display_percent_text'] = _format_percent_text(pct)
+        if row.get('score') is None and row.get('estimated_index_text'):
+            row['display_percent_text'] = str(row.get('estimated_index_text') or '').strip()
+        else:
+            row['display_percent_text'] = _format_percent_text(pct)
         row['confidence_label'] = _confidence_bucket(pct)
 
 
@@ -160,9 +172,6 @@ def _compute_estimated_index(rows: List[Dict[str, Any]]) -> None:
 
     official_values = [float(r.get('score')) for r in rows if r.get('score') is not None]
     official_max = max(official_values) if official_values else None
-
-    match_values = [int(r.get('matches_count')) for r in rows if isinstance(r.get('matches_count'), int) and r.get('matches_count') > 0]
-    max_matches = max(match_values) if match_values else 0
 
     parsed_last_dates = []
     for row in rows:
@@ -187,27 +196,59 @@ def _compute_estimated_index(rows: List[Dict[str, Any]]) -> None:
             continue
 
         matches_count = row.get('matches_count') if isinstance(row.get('matches_count'), int) else 0
-        matches_strength = 0.0
-        if matches_count > 0 and max_matches > 0:
-            matches_strength = log1p(matches_count) / log1p(max_matches)
-
-        recency_strength = 0.0
         last_date = row.get('_parsed_last_match_date')
-        if isinstance(last_date, date):
-            days_old = max(0, (ref_date - last_date).days)
-            recency_strength = 1.0 / (1.0 + (days_old / 90.0))
-
-        persistence_strength = 0.0
         first_date = row.get('_parsed_first_match_date')
-        if isinstance(first_date, date) and isinstance(last_date, date):
-            span_days = max(0, (last_date - first_date).days)
-            persistence_strength = min(1.0, span_days / 120.0)
 
-        evidence = (0.72 * matches_strength) + (0.20 * recency_strength) + (0.08 * persistence_strength)
-        if matches_count <= 0 and recency_strength <= 0:
+        if matches_count <= 0:
             est = None
         else:
-            est = max(1.0, min(95.0, round(evidence * 100.0, 1)))
+            base = 100.0 * (1.0 - exp(-float(matches_count) / 11.0))
+
+            days_old = 9999
+            if isinstance(last_date, date):
+                days_old = max(0, (ref_date - last_date).days)
+            if days_old <= 14:
+                recency_adj = 2.0
+            elif days_old <= 30:
+                recency_adj = 1.0
+            elif days_old <= 90:
+                recency_adj = 0.0
+            elif days_old <= 180:
+                recency_adj = -1.0
+            elif days_old <= 365:
+                recency_adj = -2.0
+            else:
+                recency_adj = -4.0
+
+            span_days = 0
+            if isinstance(first_date, date) and isinstance(last_date, date):
+                span_days = max(0, (last_date - first_date).days)
+            if span_days >= 180:
+                persistence_bonus = 8.0
+            elif span_days >= 90:
+                persistence_bonus = 7.0
+            elif span_days >= 30:
+                persistence_bonus = 3.0
+            elif span_days >= 7:
+                persistence_bonus = 1.0
+            else:
+                persistence_bonus = 0.0
+
+            density_penalty = 0.0
+            if matches_count >= 10:
+                if span_days <= 1:
+                    density_penalty = 30.0
+                elif span_days <= 3:
+                    density_penalty = 24.0
+                elif span_days <= 7:
+                    density_penalty = 18.0
+                elif span_days <= 14:
+                    density_penalty = 12.0
+                elif span_days <= 30:
+                    density_penalty = 8.0
+
+            est = base + recency_adj + persistence_bonus - density_penalty
+            est = max(12.0, min(99.0, round(est, 1)))
 
         row['estimated_index'] = est
         row['estimated_index_text'] = _format_estimated_index_text(est)
@@ -216,7 +257,6 @@ def _compute_estimated_index(rows: List[Dict[str, Any]]) -> None:
     for row in rows:
         row.pop('_parsed_last_match_date', None)
         row.pop('_parsed_first_match_date', None)
-
 
 def _find_likely_score(item: dict) -> Optional[float]:
     for key in (
@@ -292,8 +332,8 @@ def _candidate_from_item(item: Any) -> Optional[Dict[str, Any]]:
         if matches_count is not None:
             break
 
-    first_match_date = _first_non_empty_str(item, ('First match date', 'firstMatchDate', 'first_match_date'))
-    last_match_date = _first_non_empty_str(item, ('Last match date', 'lastMatchDate', 'last_match_date'))
+    first_match_date = _first_non_empty_str(item, ('First match date', 'firstMatchDate', 'firstMatchDateOnly', 'first_match_date'))
+    last_match_date = _first_non_empty_str(item, ('Last match date', 'lastMatchDate', 'lastMatchDateOnly', 'last_match_date'))
     matches_text = ''
     if matches_count is not None:
         matches_text = '1 correlação' if matches_count == 1 else f'{matches_count} correlações'
