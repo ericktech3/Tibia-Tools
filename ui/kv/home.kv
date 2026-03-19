@@ -401,6 +401,53 @@
                                     IconLeftWidget:
                                         icon: "account-multiple"
 
+                        MDCard:
+                            id: char_stalker_card
+                            orientation: "vertical"
+                            padding: dp(12)
+                            spacing: dp(6)
+                            size_hint_y: None
+                            height: self.minimum_height
+                            radius: [dp(16), dp(16), dp(16), dp(16)]
+                            elevation: 1
+
+                            MDBoxLayout:
+                                size_hint_y: None
+                                height: dp(32)
+                                spacing: dp(6)
+
+                                MDLabel:
+                                    text: "Tibia Stalker"
+                                    font_style: "Subtitle1"
+                                    bold: True
+
+                                Widget:
+                                    size_hint_x: 1
+
+                                MDIconButton:
+                                    icon: "open-in-new"
+                                    on_release: app.open_char_stalker_source()
+
+                            MDSeparator:
+                                height: dp(1)
+
+                            MDLabel:
+                                id: char_stalker_hint
+                                text: "Sugestões por probabilidade; não é certeza."
+                                theme_text_color: "Hint"
+                                size_hint_y: None
+                                height: self.texture_size[1] + dp(6)
+
+                            MDList:
+                                id: char_stalker_list
+                                size_hint_y: None
+                                height: self.minimum_height
+
+                                OneLineIconListItem:
+                                    text: "Faça uma busca para consultar o Tibia Stalker."
+                                    IconLeftWidget:
+                                        icon: "account-search-outline"
+
             MDBottomNavigationItem:
                 name: "tab_share"
                 text: "Share XP"

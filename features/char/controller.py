@@ -19,6 +19,11 @@ from integrations.tibiadata import (
     fetch_guildstats_exp_changes,
 )
 from integrations.tibia_com import is_character_online_tibia_com
+from integrations.tibiastalker import (
+    build_stalker_character_url,
+    extract_stalker_candidates,
+    fetch_stalker_character,
+)
 from core.exp_loss import estimate_death_exp_lost
 from services.error_reporting import log_current_exception
 
@@ -66,6 +71,37 @@ class CharControllerMixin:
 
     def _favorite_names_set(self) -> set[str]:
         return {str(x).strip().lower() for x in (getattr(self, "favorites", []) or []) if str(x).strip()}
+
+    def _format_stalker_secondary(self, row: dict) -> str:
+        bits = []
+        score_text = str(row.get("score_text") or "").strip()
+        if score_text:
+            bits.append(f"Score {score_text}")
+        world = str(row.get("world") or "").strip()
+        if world:
+            bits.append(world)
+        level = row.get("level")
+        if isinstance(level, int):
+            bits.append(f"lvl {level}")
+        voc = str(row.get("vocation") or "").strip()
+        if voc:
+            bits.append(voc)
+        return " • ".join(bits) if bits else "Toque para abrir no app"
+
+    def open_char_from_stalker_list(self, name: str):
+        self.open_char_from_account_list(name)
+
+    def open_char_stalker_source(self):
+        home = self._get_home_screen()
+        url = getattr(home, "char_stalker_source_url", "") if home is not None else ""
+        if not url:
+            self.toast("Sem link do Tibia Stalker para abrir agora.")
+            return
+        try:
+            webbrowser.open(url)
+        except Exception:
+            log_current_exception(prefix="[char] falha ao abrir Tibia Stalker no navegador")
+            self.toast("Não foi possível abrir o Tibia Stalker.")
 
     def clear_char_search(self):
         home = self._get_home_screen()
@@ -228,6 +264,16 @@ class CharControllerMixin:
                 acc_item = OneLineIconListItem(text="Aguardando...")
                 acc_item.add_widget(IconLeftWidget(icon="account-multiple"))
                 account_list.add_widget(acc_item)
+
+            stalker_list = ids.get("char_stalker_list") if hasattr(ids, "get") else None
+            stalker_hint = ids.get("char_stalker_hint") if hasattr(ids, "get") else None
+            if stalker_hint is not None:
+                stalker_hint.text = "Sugestões por probabilidade; não é certeza."
+            if stalker_list is not None:
+                stalker_list.clear_widgets()
+                st_item = OneLineIconListItem(text="Consultando Tibia Stalker...")
+                st_item.add_widget(IconLeftWidget(icon="account-search-outline"))
+                stalker_list.add_widget(st_item)
             return
 
         char_status = ids.get("char_status") if hasattr(ids, "get") else None
@@ -270,6 +316,16 @@ class CharControllerMixin:
                 acc_item = OneLineIconListItem(text="—")
                 acc_item.add_widget(IconLeftWidget(icon="account-multiple"))
                 account_list.add_widget(acc_item)
+
+            stalker_list = ids.get("char_stalker_list") if hasattr(ids, "get") else None
+            stalker_hint = ids.get("char_stalker_hint") if hasattr(ids, "get") else None
+            if stalker_hint is not None:
+                stalker_hint.text = "Sugestões por probabilidade; não é certeza."
+            if stalker_list is not None:
+                stalker_list.clear_widgets()
+                st_item = OneLineIconListItem(text="—")
+                st_item.add_widget(IconLeftWidget(icon="account-search-outline"))
+                stalker_list.add_widget(st_item)
             return
 
         char_status = ids.get("char_status") if hasattr(ids, "get") else None
@@ -528,6 +584,45 @@ class CharControllerMixin:
                 dlist.add_widget(ditem)
 
             # ----------------------------
+            # Card: Tibia Stalker
+            # ----------------------------
+            if "char_stalker_list" in home.ids:
+                try:
+                    s_hint = home.ids.get("char_stalker_hint") if hasattr(home.ids, "get") else None
+                    s_list = home.ids.char_stalker_list
+                    s_list.clear_widgets()
+
+                    loading_stalker = bool(payload.get("stalker_loading"))
+                    stalker_error = str(payload.get("stalker_error") or "").strip()
+                    stalker_rows = payload.get("stalker_candidates") or []
+                    if s_hint is not None:
+                        s_hint.text = "Sugestões por probabilidade; não é certeza."
+
+                    if loading_stalker and not stalker_rows:
+                        item = OneLineIconListItem(text="Consultando Tibia Stalker...")
+                        item.add_widget(IconLeftWidget(icon="account-search-outline"))
+                        s_list.add_widget(item)
+                    elif isinstance(stalker_rows, list) and stalker_rows:
+                        for row in stalker_rows[:10]:
+                            if not isinstance(row, dict):
+                                continue
+                            nm = str(row.get("name") or "").strip()
+                            if not nm:
+                                continue
+                            sec = self._format_stalker_secondary(row)
+                            it = TwoLineIconListItem(text=nm, secondary_text=sec or " ")
+                            it.add_widget(IconLeftWidget(icon="account-search"))
+                            it.bind(on_release=lambda *_ , nn=nm: self.open_char_from_stalker_list(nn))
+                            s_list.add_widget(it)
+                    else:
+                        txt = stalker_error or "Sem sugestões para este personagem no Tibia Stalker."
+                        item = OneLineIconListItem(text=txt)
+                        item.add_widget(IconLeftWidget(icon="account-search-outline"))
+                        s_list.add_widget(item)
+                except Exception:
+                    log_current_exception(prefix="[char] falha ao renderizar Tibia Stalker")
+
+            # ----------------------------
             # Card: Outros chars na conta
             # ----------------------------
             if "char_account_list" in home.ids:
@@ -608,6 +703,7 @@ class CharControllerMixin:
         self._char_set_loading(home, name)
         home.char_last_url = ""
         home.char_xp_source_url = ""
+        home.char_stalker_source_url = build_stalker_character_url(name)
 
         # Token para evitar que resultados de buscas antigas sobrescrevam a busca atual.
         try:
@@ -836,6 +932,10 @@ class CharControllerMixin:
                     "gs_exp_loading": True,
 
                     "other_characters": other_chars,
+                    "stalker_candidates": [],
+                    "stalker_loading": True,
+                    "stalker_error": "",
+                    "stalker_source_url": build_stalker_character_url(title or name),
 
                     "_world_status_checked": bool(world_status_checked),
                 }
@@ -969,6 +1069,25 @@ class CharControllerMixin:
                     except Exception:
                         pass
     
+                    # Tibia Stalker (suggested alternate characters)
+                    try:
+                        stalker_data = fetch_stalker_character(title or name, timeout=12)
+                        payload["stalker_candidates"] = extract_stalker_candidates(stalker_data, target_name=title or name, limit=10)
+                        payload["stalker_error"] = ""
+                    except requests.HTTPError as exc:
+                        payload["stalker_candidates"] = []
+                        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                        if status_code == 404:
+                            payload["stalker_error"] = "Sem sugestões para este personagem no Tibia Stalker."
+                        else:
+                            payload["stalker_error"] = "Tibia Stalker indisponível agora."
+                    except Exception:
+                        payload["stalker_candidates"] = []
+                        payload["stalker_error"] = "Tibia Stalker indisponível agora."
+                        log_current_exception(prefix=f"[char] Tibia Stalker falhou: {title or name}")
+                    finally:
+                        payload["stalker_loading"] = False
+
                     # Atualiza last_login_* com base no status refinado
                     try:
                         if payload.get("status") == "online":
