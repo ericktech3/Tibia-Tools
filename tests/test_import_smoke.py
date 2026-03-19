@@ -11,6 +11,7 @@ class ImportSmokeTests(unittest.TestCase):
             "integrations.exevopan",
             "integrations.tibia_com",
             "integrations.github_releases",
+            "integrations.tibiastalker",
             "repositories.favorites_repo",
             "services.error_reporting",
             "services.release_service",
