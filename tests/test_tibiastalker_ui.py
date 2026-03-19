@@ -9,14 +9,14 @@ class TibiaStalkerUiFieldsTests(unittest.TestCase):
             'possibleCharacters': [
                 {'name': 'High', 'score': 98},
                 {'name': 'Medium', 'score': 62},
-                {'name': 'Low', 'score': 21},
+                {'name': 'Low', 'score': 18},
             ]
         }
         rows = extract_stalker_candidates(payload, target_name='Target')
         labels = {row['name']: row.get('confidence_label') for row in rows}
-        self.assertEqual(labels['High'], 'Alta confiança')
-        self.assertEqual(labels['Medium'], 'Média confiança')
-        self.assertEqual(labels['Low'], 'Baixa confiança')
+        self.assertEqual(labels['High'], 'VERY HIGH')
+        self.assertEqual(labels['Medium'], 'MEDIUM')
+        self.assertEqual(labels['Low'], 'LOW')
 
     def test_extract_candidates_adds_display_fields(self):
         payload = {
@@ -37,7 +37,7 @@ class TibiaStalkerUiFieldsTests(unittest.TestCase):
         self.assertIn('confidence_label', row)
         self.assertTrue(row['display_percent'] > 0)
         self.assertTrue(row['display_percent_text'].endswith('%'))
-        self.assertIn(row['confidence_label'], {'Alta confiança', 'Média confiança', 'Baixa confiança'})
+        self.assertIn(row['confidence_label'], {'VERY HIGH', 'MEDIUM', 'LOW'})
 
 
 if __name__ == '__main__':

@@ -86,6 +86,27 @@ class TibiaStalkerIntegrationTests(unittest.TestCase):
         self.assertEqual(rows[0]["last_match_date"], "2023-04-06")
 
 
+class TibiaStalkerCalibratedScoreTests(unittest.TestCase):
+    def test_real_api_shape_produces_calibrated_score_bands(self):
+        payload = {
+            "name": "Monk Curandeiro",
+            "correlations": [
+                {"otherCharacterName": "Kina do Erick", "numberOfMatches": 15, "firstMatchDateOnly": "2025-10-30", "lastMatchDateOnly": "2026-03-01"},
+                {"otherCharacterName": "Poke Nontabaia", "numberOfMatches": 3, "firstMatchDateOnly": "2026-02-26", "lastMatchDateOnly": "2026-02-26"},
+                {"otherCharacterName": "Absolutx", "numberOfMatches": 3, "firstMatchDateOnly": "2025-04-30", "lastMatchDateOnly": "2025-04-30"},
+                {"otherCharacterName": "Norte Vini Norte", "numberOfMatches": 2, "firstMatchDateOnly": "2026-02-28", "lastMatchDateOnly": "2026-02-28"},
+            ]
+        }
+        rows = extract_stalker_candidates(payload, target_name="Monk Curandeiro")
+        by_name = {row["name"]: row for row in rows}
+        self.assertEqual(by_name["Kina do Erick"]["display_percent_text"], "83%")
+        self.assertEqual(by_name["Kina do Erick"]["confidence_label"], "VERY HIGH")
+        self.assertEqual(by_name["Poke Nontabaia"]["display_percent_text"], "26%")
+        self.assertEqual(by_name["Poke Nontabaia"]["confidence_label"], "MEDIUM")
+        self.assertEqual(by_name["Absolutx"]["display_percent_text"], "22%")
+        self.assertEqual(by_name["Norte Vini Norte"]["confidence_label"], "LOW")
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -112,7 +133,7 @@ class TibiaStalkerEstimatedIndexTests(unittest.TestCase):
         }
         rows = extract_stalker_candidates(payload, target_name="Bobeek")
         self.assertEqual(rows[0]["name"], "lidera bobek")
-        self.assertEqual(rows[0]["estimated_index_text"], "95%")
+        self.assertEqual(rows[0]["estimated_index_text"], "99%")
         self.assertTrue(rows[1]["estimated_index"] < rows[0]["estimated_index"])
         self.assertTrue(rows[1]["estimated_index_text"].endswith("%"))
 
