@@ -75,9 +75,16 @@ class CharControllerMixin:
     def _format_stalker_secondary(self, row: dict) -> str:
         bits = []
         chance_text = str(row.get("chance_text") or "").strip()
+        estimated_index_text = str(row.get("estimated_index_text") or "").strip()
         if chance_text:
             bits.append(f"Chance {chance_text}")
-        else:
+        elif estimated_index_text:
+            bits.append(f"Índice estimado {estimated_index_text}")
+
+        matches_text = str(row.get("matches_text") or "").strip()
+        if matches_text:
+            bits.append(matches_text)
+        elif not chance_text and not estimated_index_text:
             score_text = str(row.get("score_text") or "").strip()
             if score_text:
                 bits.append(f"Score {score_text}")
@@ -90,6 +97,12 @@ class CharControllerMixin:
         voc = str(row.get("vocation") or "").strip()
         if voc:
             bits.append(voc)
+        last_match_date = str(row.get("last_match_date") or "").strip()
+        if last_match_date:
+            bits.append(f"última {last_match_date}")
+        first_match_date = str(row.get("first_match_date") or "").strip()
+        if first_match_date and not last_match_date:
+            bits.append(f"primeira {first_match_date}")
         return " • ".join(bits) if bits else "Toque para abrir no app"
 
     def open_char_from_stalker_list(self, name: str):

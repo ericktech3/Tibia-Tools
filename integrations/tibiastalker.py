@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date, datetime
+from math import log1p
 from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import quote
 
@@ -61,6 +63,19 @@ def _to_float(value: Any) -> Optional[float]:
         return None
 
 
+def _safe_int_like(value: Any) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    try:
+        return int(float(str(value).strip().replace(',', '.')))
+    except (TypeError, ValueError):
+        return None
+
+
 def _format_percent_text(value: Optional[float]) -> str:
     if value is None:
         return ''
@@ -78,6 +93,92 @@ def _format_percent_text(value: Optional[float]) -> str:
     if abs(rounded - round(rounded)) < 1e-9:
         return f'{int(round(rounded))}%'
     return f'{rounded:.1f}%'
+
+
+def _parse_date_loose(value: Any) -> Optional[date]:
+    if value is None or value == '':
+        return None
+    txt = str(value).strip()
+    if not txt:
+        return None
+    for fmt in ('%Y-%m-%d', '%Y/%m/%d', '%d-%m-%Y', '%d/%m/%Y'):
+        try:
+            return datetime.strptime(txt, fmt).date()
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(txt.replace('Z', '+00:00')).date()
+    except ValueError:
+        return None
+
+
+def _format_estimated_index_text(value: Optional[float]) -> str:
+    pct = _format_percent_text(value)
+    return pct if pct else ''
+
+
+def _compute_estimated_index(rows: List[Dict[str, Any]]) -> None:
+    if not rows:
+        return
+
+    official_values = [float(r.get('score')) for r in rows if r.get('score') is not None]
+    official_max = max(official_values) if official_values else None
+
+    match_values = [int(r.get('matches_count')) for r in rows if isinstance(r.get('matches_count'), int) and r.get('matches_count') > 0]
+    max_matches = max(match_values) if match_values else 0
+
+    parsed_last_dates = []
+    for row in rows:
+        parsed_last = _parse_date_loose(row.get('last_match_date'))
+        parsed_first = _parse_date_loose(row.get('first_match_date'))
+        row['_parsed_last_match_date'] = parsed_last
+        row['_parsed_first_match_date'] = parsed_first
+        if parsed_last is not None:
+            parsed_last_dates.append(parsed_last)
+
+    ref_date = max(parsed_last_dates) if parsed_last_dates else date.today()
+
+    for row in rows:
+        score = row.get('score')
+        if score is not None:
+            est = None
+            if official_max and official_max > 0:
+                est = max(1.0, min(99.0, (float(score) / float(official_max)) * 100.0))
+            row['estimated_index'] = est
+            row['estimated_index_text'] = _format_estimated_index_text(est)
+            row['estimated_index_is_official_proxy'] = True
+            continue
+
+        matches_count = row.get('matches_count') if isinstance(row.get('matches_count'), int) else 0
+        matches_strength = 0.0
+        if matches_count > 0 and max_matches > 0:
+            matches_strength = log1p(matches_count) / log1p(max_matches)
+
+        recency_strength = 0.0
+        last_date = row.get('_parsed_last_match_date')
+        if isinstance(last_date, date):
+            days_old = max(0, (ref_date - last_date).days)
+            recency_strength = 1.0 / (1.0 + (days_old / 90.0))
+
+        persistence_strength = 0.0
+        first_date = row.get('_parsed_first_match_date')
+        if isinstance(first_date, date) and isinstance(last_date, date):
+            span_days = max(0, (last_date - first_date).days)
+            persistence_strength = min(1.0, span_days / 120.0)
+
+        evidence = (0.72 * matches_strength) + (0.20 * recency_strength) + (0.08 * persistence_strength)
+        if matches_count <= 0 and recency_strength <= 0:
+            est = None
+        else:
+            est = max(1.0, min(95.0, round(evidence * 100.0, 1)))
+
+        row['estimated_index'] = est
+        row['estimated_index_text'] = _format_estimated_index_text(est)
+        row['estimated_index_is_official_proxy'] = False
+
+    for row in rows:
+        row.pop('_parsed_last_match_date', None)
+        row.pop('_parsed_first_match_date', None)
 
 
 def _find_likely_score(item: dict) -> Optional[float]:
@@ -106,6 +207,14 @@ def _candidate_from_item(item: Any) -> Optional[Dict[str, Any]]:
             'name': item.strip(),
             'score': None,
             'score_text': '',
+            'chance_text': '',
+            'estimated_index': None,
+            'estimated_index_text': '',
+            'estimated_index_is_official_proxy': False,
+            'matches_count': None,
+            'matches_text': '',
+            'first_match_date': '',
+            'last_match_date': '',
             'world': '',
             'level': None,
             'vocation': '',
@@ -140,11 +249,30 @@ def _candidate_from_item(item: Any) -> Optional[Dict[str, Any]]:
         score_text = f'{int(score)}' if abs(score - int(score)) < 1e-9 else f'{score:.1f}'
     chance_text = _format_percent_text(score)
 
+    matches_count = None
+    for mk in ('numberOfMatches', 'matchesCount', 'matchCount', 'correlationsCount', 'occurrences', 'hits'):
+        matches_count = _safe_int_like(item.get(mk))
+        if matches_count is not None:
+            break
+
+    first_match_date = _first_non_empty_str(item, ('First match date', 'firstMatchDate', 'first_match_date'))
+    last_match_date = _first_non_empty_str(item, ('Last match date', 'lastMatchDate', 'last_match_date'))
+    matches_text = ''
+    if matches_count is not None:
+        matches_text = '1 correlação' if matches_count == 1 else f'{matches_count} correlações'
+
     return {
         'name': name,
         'score': score,
         'score_text': score_text,
         'chance_text': chance_text,
+        'estimated_index': None,
+        'estimated_index_text': '',
+        'estimated_index_is_official_proxy': False,
+        'matches_count': matches_count,
+        'matches_text': matches_text,
+        'first_match_date': first_match_date,
+        'last_match_date': last_match_date,
         'world': world,
         'level': level,
         'vocation': vocation,
@@ -155,7 +283,7 @@ def _collect_candidate_lists(node: Any, out: List[list]) -> None:
     if isinstance(node, dict):
         for key, value in node.items():
             key_l = str(key).lower()
-            if isinstance(value, list) and any(tok in key_l for tok in ('score', 'candidate', 'possible', 'suggest', 'character', 'result', 'match')):
+            if isinstance(value, list) and any(tok in key_l for tok in ('score', 'candidate', 'possible', 'suggest', 'character', 'result', 'match', 'correlation')):
                 out.append(value)
             _collect_candidate_lists(value, out)
     elif isinstance(node, list):
@@ -207,9 +335,17 @@ def extract_stalker_candidates(data: Dict[str, Any], target_name: str = '', limi
         if (new_score is not None) and (prev_score is None or new_score > prev_score):
             dedup[key] = cand
 
+    rows = list(dedup.values())
+    _compute_estimated_index(rows)
+
     ordered = sorted(
-        dedup.values(),
-        key=lambda row: (row.get('score') is not None, row.get('score') or -1, row.get('name', '').lower()),
+        rows,
+        key=lambda row: (
+            row.get('score') is not None,
+            row.get('score') if row.get('score') is not None else (row.get('estimated_index') or -1),
+            row.get('matches_count') if isinstance(row.get('matches_count'), int) else -1,
+            row.get('name', '').lower(),
+        ),
         reverse=True,
     )
     return ordered[: max(1, int(limit or 10))]
