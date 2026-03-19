@@ -60,6 +60,70 @@ class TibiaStalkerIntegrationTests(unittest.TestCase):
         self.assertEqual(rows[1]["name"], "Fraction Main")
         self.assertEqual(rows[1]["chance_text"], "64.2%")
 
+    def test_extract_candidates_from_real_tibiastalker_shape(self):
+        payload = {
+            "name": "Bobeek",
+            "world": "Bonel",
+            "correlations": [
+                {
+                    "otherCharacterName": "lidera bobek",
+                    "numberOfMatches": 66,
+                    "First match date": "2022-12-06",
+                    "Last match date": "2023-04-06",
+                },
+                {
+                    "otherCharacterName": "bobek",
+                    "numberOfMatches": 23,
+                    "First match date": "2022-12-06",
+                    "Last match date": "2023-04-10",
+                },
+            ],
+        }
+        rows = extract_stalker_candidates(payload, target_name="Bobeek")
+        self.assertEqual(rows[0]["name"], "lidera bobek")
+        self.assertEqual(rows[0]["matches_count"], 66)
+        self.assertEqual(rows[0]["matches_text"], "66 correlações")
+        self.assertEqual(rows[0]["last_match_date"], "2023-04-06")
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TibiaStalkerEstimatedIndexTests(unittest.TestCase):
+    def test_real_shape_computes_estimated_index_from_matches_and_recency(self):
+        payload = {
+            "name": "Bobeek",
+            "world": "Bonel",
+            "correlations": [
+                {
+                    "otherCharacterName": "lidera bobek",
+                    "numberOfMatches": 66,
+                    "First match date": "2022-12-06",
+                    "Last match date": "2023-04-06",
+                },
+                {
+                    "otherCharacterName": "bobek",
+                    "numberOfMatches": 23,
+                    "First match date": "2022-12-06",
+                    "Last match date": "2023-04-10",
+                },
+            ],
+        }
+        rows = extract_stalker_candidates(payload, target_name="Bobeek")
+        self.assertEqual(rows[0]["name"], "lidera bobek")
+        self.assertEqual(rows[0]["estimated_index_text"], "95%")
+        self.assertTrue(rows[1]["estimated_index"] < rows[0]["estimated_index"])
+        self.assertTrue(rows[1]["estimated_index_text"].endswith("%"))
+
+    def test_official_scores_also_get_estimated_index_proxy_text(self):
+        payload = {
+            "scores": [
+                {"name": "High", "score": 80},
+                {"name": "Low", "score": 40},
+            ]
+        }
+        rows = extract_stalker_candidates(payload)
+        self.assertEqual(rows[0]["estimated_index_text"], "99%")
+        self.assertEqual(rows[1]["estimated_index_text"], "50%")
+        self.assertTrue(rows[0]["estimated_index_is_official_proxy"])
