@@ -56,7 +56,7 @@ fullscreen = 0
 
 
 # --- ANDROID ---
-android.api = 35
+android.api = 36
 android.minapi = 24
 android.activity_attributes = android:windowSoftInputMode="adjustResize"
 android.ndk = 25b
