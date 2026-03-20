@@ -185,7 +185,7 @@ jobs:
           p = Path('buildozer.spec')
           txt = p.read_text(encoding='utf-8', errors='ignore')
           m = re.search(r'(?m)^\s*android\.api\s*=\s*(\d+)\s*$', txt)
-          android_api = m.group(1) if m else '35'
+          android_api = m.group(1) if m else '36'
           with open('/home/runner/work/_temp/android_env', 'w') as f:
               f.write(f'ANDROID_API={android_api}\n')
           print('ANDROID_API =', android_api)
