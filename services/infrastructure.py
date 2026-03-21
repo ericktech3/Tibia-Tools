@@ -82,14 +82,14 @@ class InfrastructureMixin:
     def _open_app_notification_settings(self):
         return self.android_bridge.open_app_notification_settings()
 
-    def _start_fav_monitor_service(self):
-        return self.android_bridge.start_fav_monitor_service()
+    def _start_fav_monitor_service(self, reason: str = "manual"):
+        return self.android_bridge.start_fav_monitor_service(reason=reason)
 
-    def _stop_fav_monitor_service(self):
-        return self.android_bridge.stop_fav_monitor_service()
+    def _stop_fav_monitor_service(self, reason: str = "manual"):
+        return self.android_bridge.stop_fav_monitor_service(reason=reason)
 
-    def _maybe_start_fav_monitor_service(self):
-        return self.android_bridge.maybe_start_fav_monitor_service()
+    def _maybe_start_fav_monitor_service(self, reason: str = "state_change"):
+        return self.android_bridge.maybe_start_fav_monitor_service(reason=reason)
 
     def _load_fav_service_state_cached(self) -> dict:
         return self.android_bridge.load_fav_service_state_cached()

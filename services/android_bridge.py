@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime
 
@@ -15,6 +16,59 @@ from services.error_reporting import log_current_exception
 class AndroidBridgeService:
     def __init__(self, app):
         self.app = app
+
+    def _service_log_path(self) -> str:
+        try:
+            base = str(getattr(self.app, "data_dir", "") or "").strip()
+            if base:
+                os.makedirs(base, exist_ok=True)
+                return os.path.join(base, "tibia_tools_service_control.log")
+        except Exception:
+            pass
+        return ""
+
+    def _log_service_event(self, message: str) -> None:
+        try:
+            path = self._service_log_path()
+            if not path:
+                return
+            ts = datetime.utcnow().isoformat()
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(f"[{ts}] {message}\n")
+        except Exception:
+            pass
+
+    def _monitor_service_alive(self, max_age_s: int | None = None) -> bool:
+        try:
+            st = fav_state.load_state(self.app.data_dir)
+            if not isinstance(st, dict):
+                return False
+            last = st.get("last", {})
+            if not isinstance(last, dict) or not last:
+                return False
+            interval = int(st.get("interval_seconds") or 30)
+            if max_age_s is None:
+                max_age_s = max(90, interval * 3)
+            now = datetime.utcnow()
+            newest = None
+            for entry in last.values():
+                if not isinstance(entry, dict):
+                    continue
+                iso = entry.get("last_checked_iso")
+                if not isinstance(iso, str) or not iso.strip():
+                    continue
+                try:
+                    dt = datetime.fromisoformat(iso)
+                except Exception:
+                    continue
+                if newest is None or dt > newest:
+                    newest = dt
+            if newest is None:
+                return False
+            age = (now - newest).total_seconds()
+            return age <= int(max_age_s)
+        except Exception:
+            return False
 
     def is_android(self) -> bool:
         return platform == "android"
@@ -210,18 +264,44 @@ class AndroidBridgeService:
         except Exception:
             pass
 
-    def start_fav_monitor_service(self):
+    def start_fav_monitor_service(self, reason: str = "manual"):
         if not self.is_android():
-            return
+            return False
+
+        now = time.monotonic()
+        cooldown = float(getattr(self.app, "_fav_monitor_start_cooldown_s", 12.0) or 12.0)
+        last_try = float(getattr(self.app, "_fav_monitor_last_start_attempt_ts", 0.0) or 0.0)
+        last_stop = float(getattr(self.app, "_fav_monitor_last_stop_ts", 0.0) or 0.0)
+
+        if bool(getattr(self.app, "_fav_monitor_starting", False)):
+            self._log_service_event(f"start skip: already starting ({reason})")
+            return False
+
+        if bool(getattr(self.app, "_bg_service", False)) and self._monitor_service_alive():
+            self._log_service_event(f"start skip: already alive ({reason})")
+            return True
+
+        if (now - last_try) < cooldown:
+            self._log_service_event(f"start skip: cooldown ({reason})")
+            return False
+
+        if (now - last_stop) < 4.0:
+            self._log_service_event(f"start skip: just stopped ({reason})")
+            return False
+
+        self.app._fav_monitor_starting = True
+        self.app._fav_monitor_last_start_attempt_ts = now
 
         if self.android_sdk_int() >= 33:
             ok = self.ensure_post_notifications_permission(auto_open_settings=False)
             if not ok:
+                self._log_service_event(f"start blocked: notifications disabled ({reason})")
                 try:
                     self.prompt_enable_notifications_dialog()
                 except Exception:
                     pass
-                return
+                self.app._fav_monitor_starting = False
+                return False
 
         try:
             from jnius import autoclass  # type: ignore
@@ -233,25 +313,45 @@ class AndroidBridgeService:
             except Exception:
                 ServiceFavwatch.start(ctx, '')
             self.app._bg_service = True
+            self.app._fav_monitor_last_start_ok_ts = time.monotonic()
+            self._log_service_event(f"start ok ({reason})")
+            return True
         except Exception:
             log_current_exception(prefix="AndroidBridgeService.start_fav_monitor_service")
+            self._log_service_event(f"start fail ({reason})")
+            return False
+        finally:
+            self.app._fav_monitor_starting = False
 
-    def stop_fav_monitor_service(self):
+    def stop_fav_monitor_service(self, reason: str = "manual"):
         if not self.is_android():
-            return
+            return False
+
+        if bool(getattr(self.app, "_fav_monitor_stopping", False)):
+            self._log_service_event(f"stop skip: already stopping ({reason})")
+            return False
+
+        self.app._fav_monitor_stopping = True
         try:
             from jnius import autoclass  # type: ignore
             ServiceFavwatch = autoclass('org.erick.tibiatools.ServiceFavwatch')
             PythonActivity = autoclass('org.kivy.android.PythonActivity')
             ctx = PythonActivity.mActivity
             ServiceFavwatch.stop(ctx)
-            self.app._bg_service = None
+            self.app._bg_service = False
+            self.app._fav_monitor_last_stop_ts = time.monotonic()
+            self._log_service_event(f"stop ok ({reason})")
+            return True
         except Exception:
             log_current_exception(prefix="AndroidBridgeService.stop_fav_monitor_service")
+            self._log_service_event(f"stop fail ({reason})")
+            return False
+        finally:
+            self.app._fav_monitor_stopping = False
 
-    def maybe_start_fav_monitor_service(self):
+    def maybe_start_fav_monitor_service(self, reason: str = "state_change"):
         if not self.is_android():
-            return
+            return False
         try:
             st = fav_state.load_state(self.app.data_dir)
             monitoring = bool(st.get("monitoring", True))
@@ -259,11 +359,12 @@ class AndroidBridgeService:
             has_favs = isinstance(favs, list) and any(str(x).strip() for x in favs)
 
             if monitoring and has_favs:
-                self.start_fav_monitor_service()
-            else:
-                self.stop_fav_monitor_service()
+                return self.start_fav_monitor_service(reason=reason)
+            return self.stop_fav_monitor_service(reason=reason)
         except Exception:
             log_current_exception(prefix="AndroidBridgeService.maybe_start_fav_monitor_service")
+            self._log_service_event(f"maybe_start fail ({reason})")
+            return False
 
     def load_fav_service_state_cached(self) -> dict:
         try:
@@ -345,6 +446,6 @@ class AndroidBridgeService:
             pass
 
         try:
-            self.maybe_start_fav_monitor_service()
+            self.maybe_start_fav_monitor_service(reason="settings_sync")
         except Exception:
             pass

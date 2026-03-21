@@ -313,13 +313,10 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             self._flush_cache_to_disk(force=True)
         except Exception:
             pass
-        # Garante que o monitor em segundo plano continue rodando mesmo com o app fechado.
-        # (Alguns usuários abrem e fecham rápido; isso assegura que o serviço seja iniciado no background.)
-        try:
-            Clock.schedule_once(lambda *_: self._safe_call(self._maybe_start_fav_monitor_service), 0)
-        except Exception:
-            pass
-
+        # Nao inicia o servico a partir do on_pause.
+        # Em Androids mais novos isso pode virar loop de start enquanto o app vai
+        # para background, o que derruba o processo do servico e gera o aviso
+        # de "falhas continuas" mesmo sem fechar a Activity principal.
         return True
 
     def on_stop(self):
@@ -738,12 +735,9 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         except Exception:
             pass
 
-        # Start/stop background monitor according to current settings.
-        # (Needs to run after the initial permission check on Android 13+.)
-        try:
-            Clock.schedule_once(lambda *_: self._safe_call(self._maybe_start_fav_monitor_service), 1.6)
-        except Exception:
-            pass
+        # Nao inicia o servico automaticamente no on_start.
+        # O monitor passa a ser sincronizado apenas por acoes explicitas:
+        # alteracao de favoritos, mudanca nas configuracoes e boot do aparelho.
 
     def on_resume(self):
         # Quando o usuário toca na notificação com o app em background, isso garante o deep-link.
@@ -752,11 +746,9 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         except Exception:
             pass
 
-        # Reconfere o estado do serviço ao voltar (alguns OEMs podem matar o processo do serviço).
-        try:
-            Clock.schedule_once(lambda *_: self._safe_call(self._maybe_start_fav_monitor_service), 0.8)
-        except Exception:
-            pass
+        # Nao reinicia o servico automaticamente no on_resume.
+        # Evita loops de start/stop em aparelhos/OEMs que entregam varios eventos
+        # de ciclo de vida em sequencia.
 
     def go(self, screen_name: str, *, record: bool = True):
         if screen_name == "home":
