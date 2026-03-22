@@ -100,6 +100,12 @@ public class BootReceiver extends BroadcastReceiver {
                 return;
             }
 
+            // Android 15+ restringe boot-start de alguns foreground service types, incluindo dataSync.
+            if (Build.VERSION.SDK_INT >= 35) {
+                Log.i(TAG, "Android 15+: autostart do monitor no boot foi suprimido para evitar bloqueio do sistema.");
+                return;
+            }
+
             // Inicia o serviço Favwatch (gerado pelo python-for-android) como foreground (buildozer: :foreground)
             ServiceFavwatch.start(context, "", "Tibia Tools", "Monitorando favoritos", "");
             Log.i(TAG, "Serviço Favwatch iniciado no boot.");

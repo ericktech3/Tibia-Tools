@@ -193,10 +193,25 @@ def _android_start_foreground(title: str, text: str, notif_id: int = 1001):
 
         notif = builder.build()
         try:
-            service.startForeground(notif_id, notif)
+            # Android 10+ suporta foreground service type explícito.
+            # Em Android 14+ isso é obrigatório para vários FGS, inclusive dataSync.
+            sdk_int = 0
+            try:
+                sdk_int = int(VERSION.SDK_INT)
+            except Exception:
+                sdk_int = 0
+            if sdk_int >= 29:
+                try:
+                    ServiceInfo = autoclass("android.content.pm.ServiceInfo")
+                    fg_type = int(ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                    service.startForeground(int(notif_id), notif, fg_type)
+                except Exception:
+                    service.startForeground(int(notif_id), notif)
+            else:
+                service.startForeground(int(notif_id), notif)
         except Exception:
             # fallback: postar como notificação normal
-            nm.notify(notif_id, notif)
+            nm.notify(int(notif_id), notif)
     except Exception as e:
         _append_crash_log(f"foreground notify fail: {e}")
 

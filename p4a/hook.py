@@ -13,6 +13,7 @@ This keeps the build stable across CI environments.
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 
 RECEIVER_XML = """
@@ -67,7 +68,7 @@ def _candidate_manifest_paths(toolchain) -> list[Path]:
 
 
 def _patch_manifest_file(manifest_path: Path) -> bool:
-    """Inject the receiver entry into AndroidManifest.xml.
+    """Inject receiver + foreground-service metadata into AndroidManifest.xml.
 
     Returns True if the file was changed.
     """
@@ -75,20 +76,40 @@ def _patch_manifest_file(manifest_path: Path) -> bool:
         return False
 
     text = manifest_path.read_text("utf-8", errors="replace")
+    changed = False
 
-    # Already present?
-    if "org.erick.tibiatools.BootReceiver" in text or "<receiver" in text and "BootReceiver" in text:
-        return False
+    # Ensure specific permission for dataSync foreground service.
+    perm = '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />'
+    if 'android.permission.FOREGROUND_SERVICE_DATA_SYNC' not in text:
+        manifest_close = text.find('>')
+        app_idx = text.find('<application')
+        if app_idx != -1:
+            text = text[:app_idx] + perm + "\n" + text[app_idx:]
+            changed = True
 
-    close_tag = "</application>"
-    idx = text.rfind(close_tag)
-    if idx == -1:
-        # Unexpected manifest layout; don't risk breaking it.
-        return False
+    # Ensure BootReceiver exists.
+    if 'org.erick.tibiatools.BootReceiver' not in text:
+        close_tag = '</application>'
+        idx = text.rfind(close_tag)
+        if idx == -1:
+            return changed
+        text = text[:idx] + "\n" + RECEIVER_XML + "\n" + text[idx:]
+        changed = True
 
-    new_text = text[:idx] + "\n" + RECEIVER_XML + "\n" + text[idx:]
-    manifest_path.write_text(new_text, "utf-8")
-    return True
+    # Ensure generated ServiceFavwatch has explicit foregroundServiceType.
+    service_pattern = re.compile(r'(<service\b[^>]*android:name="(?:[^".]*)?\.?ServiceFavwatch"[^>]*)(/?>)', re.IGNORECASE)
+    def add_type(m):
+        head, tail = m.group(1), m.group(2)
+        nonlocal changed
+        if 'foregroundServiceType' in head:
+            return m.group(0)
+        changed = True
+        return f'{head} android:foregroundServiceType="dataSync"{tail}'
+    text = service_pattern.sub(add_type, text)
+
+    if changed:
+        manifest_path.write_text(text, 'utf-8')
+    return changed
 
 
 def _ensure_receiver(toolchain) -> None:
