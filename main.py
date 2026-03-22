@@ -313,10 +313,17 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             self._flush_cache_to_disk(force=True)
         except Exception:
             pass
-        # Nao inicia o servico a partir do on_pause.
-        # Em Androids mais novos isso pode virar loop de start enquanto o app vai
-        # para background, o que derruba o processo do servico e gera o aviso
-        # de "falhas continuas" mesmo sem fechar a Activity principal.
+        # Faz apenas uma sincronizacao atrasada e debounced ao ir para background.
+        # O AndroidBridgeService ja aplica cooldown/anti-loop; aqui apenas garantimos
+        # que o monitor nao fique morto para usuarios com favoritos ativos.
+        try:
+            Clock.unschedule(self._sync_monitor_on_pause)
+        except Exception:
+            pass
+        try:
+            Clock.schedule_once(lambda *_: self._safe_call(self._sync_monitor_on_pause), 0.8)
+        except Exception:
+            pass
         return True
 
     def on_stop(self):
@@ -735,9 +742,32 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         except Exception:
             pass
 
-        # Nao inicia o servico automaticamente no on_start.
-        # O monitor passa a ser sincronizado apenas por acoes explicitas:
-        # alteracao de favoritos, mudanca nas configuracoes e boot do aparelho.
+        # Sincroniza o monitor uma vez apos a UI subir.
+        # Isso restaura o servico para quem ja tinha favoritos/configuracao ativa,
+        # sem voltar ao loop agressivo anterior de start em varios lifecycle hooks.
+        try:
+            Clock.schedule_once(lambda *_: self._safe_call(self._sync_monitor_on_start), 1.6)
+        except Exception:
+            pass
+
+    def _sync_monitor_on_start(self):
+        try:
+            self._maybe_start_fav_monitor_service(reason="startup_sync")
+        except Exception:
+            log_current_exception(prefix="[main] falha ao sincronizar monitor no start")
+
+    def _sync_monitor_on_pause(self):
+        try:
+            # So tenta religar se o monitor nao parece vivo.
+            if bool(getattr(self, "_bg_service", False)) and getattr(self, "android_bridge", None):
+                try:
+                    if self.android_bridge._monitor_service_alive():
+                        return
+                except Exception:
+                    pass
+            self._maybe_start_fav_monitor_service(reason="pause_sync")
+        except Exception:
+            log_current_exception(prefix="[main] falha ao sincronizar monitor no pause")
 
     def on_resume(self):
         # Quando o usuário toca na notificação com o app em background, isso garante o deep-link.
