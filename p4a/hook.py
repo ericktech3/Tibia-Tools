@@ -97,7 +97,12 @@ def _patch_manifest_file(manifest_path: Path) -> bool:
         changed = True
 
     # Ensure generated ServiceFavwatch has explicit foregroundServiceType.
-    service_pattern = re.compile(r'(<service\b[^>]*android:name="(?:[^".]*)?\.?ServiceFavwatch"[^>]*)(/?>)', re.IGNORECASE)
+    # Accept both `.ServiceFavwatch` and fully qualified names such as
+    # `org.erick.tibiatools.ServiceFavwatch`, including self-closing tags.
+    service_pattern = re.compile(
+        r'(<service\b[^>]*android:name="(?:[^"]*\.)?ServiceFavwatch"[^>]*?)(\s*/?>)',
+        re.IGNORECASE,
+    )
     def add_type(m):
         head, tail = m.group(1), m.group(2)
         nonlocal changed
