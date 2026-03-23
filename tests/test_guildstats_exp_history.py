@@ -1,7 +1,11 @@
 import unittest
 from unittest.mock import patch
 
-from integrations.tibiadata import fetch_guildstats_exp_changes
+from integrations.tibiadata import (
+    _fetch_guildstats_exp_html,
+    _html_to_plain_text,
+    fetch_guildstats_exp_changes,
+)
 
 
 DIV_BASED_EXP_HTML = """
@@ -19,8 +23,8 @@ DIV_BASED_EXP_HTML = """
 
 
 class GuildStatsExpHistoryTests(unittest.TestCase):
-    @patch("integrations.tibiadata._get_text", return_value=DIV_BASED_EXP_HTML)
-    def test_light_only_parses_div_based_experience_history(self, _mock_get_text):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value=DIV_BASED_EXP_HTML)
+    def test_light_only_parses_div_based_experience_history(self, _mock_fetch_html):
         rows = fetch_guildstats_exp_changes("Elder Tree", light_only=True)
         self.assertEqual(
             rows,
@@ -30,10 +34,6 @@ class GuildStatsExpHistoryTests(unittest.TestCase):
                 {"date": "2026-03-20", "exp_change": "-2,248,219", "exp_change_int": -2248219},
             ],
         )
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 TWO_ROW_TABLE_HTML = """
@@ -50,8 +50,8 @@ TWO_ROW_TABLE_HTML = """
 
 
 class GuildStatsSmallHistoryTests(unittest.TestCase):
-    @patch("integrations.tibiadata._get_text", return_value=TWO_ROW_TABLE_HTML)
-    def test_light_only_accepts_history_with_two_rows(self, _mock_get_text):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value=TWO_ROW_TABLE_HTML)
+    def test_light_only_accepts_history_with_two_rows(self, _mock_fetch_html):
         rows = fetch_guildstats_exp_changes("Elder Tree", light_only=True)
         self.assertEqual(
             rows,
@@ -80,17 +80,17 @@ class _FakeTr:
 
 class _FakeSoup:
     def find_all(self, tag):
-        if tag == 'tr':
+        if tag == "tr":
             return [_FakeTr(["2026-03-20", "gain +452,409", "330"]), _FakeTr(["2026-03-21", "stable 0", "330"])]
-        if tag == 'table':
+        if tag == "table":
             return []
         return []
 
 
 class GuildStatsAndroidFallbackTests(unittest.TestCase):
     @patch("integrations.tibiadata.BeautifulSoup", return_value=_FakeSoup())
-    @patch("integrations.tibiadata._get_text", return_value="<html></html>")
-    def test_light_only_falls_back_to_beautifulsoup_when_fast_path_fails(self, _mock_get_text, _mock_bs4):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value="<html></html>")
+    def test_light_only_falls_back_to_beautifulsoup_when_fast_path_fails(self, _mock_fetch_html, _mock_bs4):
         rows = fetch_guildstats_exp_changes("Elder Tree", light_only=True)
         self.assertEqual(
             rows,
@@ -99,3 +99,45 @@ class GuildStatsAndroidFallbackTests(unittest.TestCase):
                 {"date": "2026-03-21", "exp_change": "stable 0", "exp_change_int": 0},
             ],
         )
+
+
+BASE_CHARACTER_HTML = """
+<html>
+  <body>
+    <ul>
+      <li><a href="/character?nick=Elder+Tree&tab=9">Experience</a></li>
+    </ul>
+  </body>
+</html>
+"""
+
+
+class GuildStatsPreflightSessionTests(unittest.TestCase):
+    @patch("integrations.tibiadata._new_browser_session")
+    @patch("integrations.tibiadata._session_get_text")
+    def test_fetch_exp_html_prefetches_character_page_then_uses_same_session_for_tab(self, mock_session_get, mock_new_session):
+        fake_session = object()
+        mock_new_session.return_value = fake_session
+
+        calls = []
+
+        def side_effect(session, url, timeout, headers=None):
+            calls.append(url)
+            self.assertIs(session, fake_session)
+            if "tab=9" in url:
+                return DIV_BASED_EXP_HTML
+            return BASE_CHARACTER_HTML
+
+        mock_session_get.side_effect = side_effect
+
+        html = _fetch_guildstats_exp_html("Elder Tree", timeout=12)
+        plain = _html_to_plain_text(html)
+
+        self.assertIn("Date Exp change", plain)
+        self.assertGreaterEqual(len(calls), 2)
+        self.assertIn("character?lang=en&nick=Elder+Tree", calls[0])
+        self.assertIn("tab=9", calls[1])
+
+
+if __name__ == "__main__":
+    unittest.main()

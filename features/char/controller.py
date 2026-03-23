@@ -1487,7 +1487,11 @@ class CharControllerMixin:
                         if rows is None:
                             rows = fetch_guildstats_exp_changes(title or name, light_only=self._is_android())
                             try:
-                                self._cache_set(key, rows or [])
+                                # Nao mantemos lista vazia em cache por muito tempo: se o fansite
+                                # falhar temporariamente, a proxima abertura do char deve poder
+                                # tentar novamente em vez de prender a UI por 10 minutos.
+                                if rows:
+                                    self._cache_set(key, rows)
                             except Exception:
                                 pass
     

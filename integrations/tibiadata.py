@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 import re
 import time
 import html as _html
-from urllib.parse import quote, quote_plus
+from urllib.parse import quote, quote_plus, urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -94,6 +94,195 @@ def _get_text(url: str, timeout: int, headers: Optional[dict] = None) -> str:
             continue
     _ = last_exc
     return ""
+
+
+def _new_browser_session() -> requests.Session:
+    sess = requests.Session()
+    try:
+        sess.headers.update({
+            **UA,
+            "Referer": "https://guildstats.eu/",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Upgrade-Insecure-Requests": "1",
+            # On Android, keeping encodings simple helps avoid responses that
+            # requests may fail to decode reliably on some builds (e.g. br/zstd).
+            "Accept-Encoding": "gzip, deflate",
+        })
+    except Exception:
+        pass
+    return sess
+
+
+def _session_get_text(session: requests.Session, url: str, timeout: int, headers: Optional[dict] = None) -> str:
+    hdr = headers or {}
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            try:
+                r = session.get(url, timeout=timeout, headers=hdr or None, allow_redirects=True)
+            except requests.exceptions.SSLError:
+                r = session.get(url, timeout=timeout, headers=hdr or None, allow_redirects=True, verify=False)
+            if int(getattr(r, "status_code", 0) or 0) >= 500:
+                raise requests.HTTPError(f"HTTP {r.status_code}", response=r)
+            if r.status_code != 200:
+                return ""
+            return r.text or ""
+        except Exception as e:
+            last_exc = e
+            if attempt < 2:
+                time.sleep(0.6 * (2 ** attempt))
+            continue
+    _ = last_exc
+    return ""
+
+
+def _guildstats_blocked_or_empty(html_text: str) -> bool:
+    low = (html_text or "").lower()
+    if not low.strip():
+        return True
+    block_markers = (
+        "checking your browser",
+        "just a moment",
+        "cf-browser-verification",
+        "attention required",
+        "verify you are human",
+        "enable javascript",
+        "access denied",
+        "captcha",
+        "security check",
+    )
+    return any(marker in low for marker in block_markers)
+
+
+def _html_to_plain_text(html_text: str) -> str:
+    txt = html_text or ""
+    txt = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", txt)
+    txt = re.sub(r"(?i)<br\s*/?>", " ", txt)
+    txt = re.sub(r"(?is)<[^>]+>", " ", txt)
+    try:
+        txt = _html.unescape(txt)
+    except Exception:
+        pass
+    txt = txt.replace("\xa0", " ")
+    txt = re.sub(r"\s+", " ", txt).strip()
+    return txt
+
+
+def _looks_like_guildstats_exp_page(html_text: str) -> bool:
+    plain = _html_to_plain_text(html_text).lower()
+    if not plain:
+        return False
+    if "date exp change" in plain:
+        return True
+    if "total in month" in plain and "avg exp per hour" in plain:
+        return True
+    if "exp change" in plain and re.search(r"\b\d{4}-\d{2}-\d{2}\b", plain):
+        return True
+    return False
+
+
+def _extract_guildstats_tab_url(base_html: str, tab_number: str) -> str:
+    txt = base_html or ""
+    if not txt:
+        return ""
+    pat = re.compile(
+        r'href\s*=\s*["\'](?P<href>[^"\']*character[^"\']*tab='
+        + re.escape(str(tab_number))
+        + r'[^"\']*)["\']',
+        re.I,
+    )
+    m = pat.search(txt)
+    if not m:
+        return ""
+    href = _html.unescape(str(m.group("href") or "").strip())
+    if not href:
+        return ""
+    return urljoin("https://guildstats.eu/", href)
+
+
+def _unique_preserve_order(urls: List[str]) -> List[str]:
+    out: List[str] = []
+    seen = set()
+    for raw in urls or []:
+        u = str(raw or "").strip()
+        if not u or u in seen:
+            continue
+        seen.add(u)
+        out.append(u)
+    return out
+
+
+def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
+    enc_quote = quote(name, safe="")
+    enc_plus = quote_plus(name)
+
+    base_urls = [
+        f"https://guildstats.eu/character?lang=en&nick={enc_plus}",
+        f"https://guildstats.eu/character?lang=pt&nick={enc_plus}",
+        f"https://guildstats.eu/character?nick={enc_plus}",
+        f"https://guildstats.eu/character?lang=en&nick={enc_quote}",
+        f"https://guildstats.eu/character?lang=pt&nick={enc_quote}",
+        f"https://guildstats.eu/character?nick={enc_quote}",
+    ]
+    tab_urls = [
+        GUILDSTATS_EXP_URL.format(name=enc_quote),
+        GUILDSTATS_EXP_URL.format(name=enc_plus),
+        GUILDSTATS_EXP_URL.format(name=enc_quote) + "&lang=pt",
+        GUILDSTATS_EXP_URL.format(name=enc_quote) + "&lang=en",
+        GUILDSTATS_EXP_URL.format(name=enc_plus) + "&lang=pt",
+        GUILDSTATS_EXP_URL.format(name=enc_plus) + "&lang=en",
+    ]
+
+    session = _new_browser_session()
+    headers = {
+        "Referer": "https://guildstats.eu/",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Accept": UA.get("Accept", "*/*"),
+        "Accept-Language": UA.get("Accept-Language", "en-US,en;q=0.8"),
+    }
+
+    base_html = ""
+    # More reliable flow on GuildStats: open the character base page first and
+    # only then follow the Experience tab using the same session/cookies.
+    for u in _unique_preserve_order(base_urls):
+        txt = _session_get_text(session, u, timeout=timeout, headers=headers)
+        if not txt or _guildstats_blocked_or_empty(txt):
+            continue
+        base_html = txt
+        break
+
+    candidate_urls: List[str] = []
+    extracted = _extract_guildstats_tab_url(base_html, "9")
+    if extracted:
+        candidate_urls.append(extracted)
+    candidate_urls.extend(tab_urls)
+
+    best_html = ""
+    best_score = -1
+    for u in _unique_preserve_order(candidate_urls):
+        txt = _session_get_text(session, u, timeout=timeout, headers=headers)
+        if not txt or _guildstats_blocked_or_empty(txt):
+            continue
+
+        plain = _html_to_plain_text(txt).lower()
+        score = 0
+        if _looks_like_guildstats_exp_page(txt):
+            score += 1000
+        score += len(re.findall(r"\b\d{4}-\d{2}-\d{2}\b", plain))
+        if "avg exp per hour" in plain:
+            score += 50
+        if "total in month" in plain:
+            score += 50
+
+        if score > best_score:
+            best_html = txt
+            best_score = score
+        if score >= 1000:
+            break
+
+    return best_html
 
 
 def fetch_worlds_tibiadata(timeout: int = 12) -> Dict[str, Any]:
@@ -381,58 +570,11 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
     Observação: é um complemento (fansite). Se falhar, devolve lista vazia.
     """
     try:
-        # O GuildStats é um fansite e pode variar o HTML (às vezes sem <th> no cabeçalho).
-        # Aqui tentamos ser tolerantes: buscamos a tabela "Date / Exp change" por padrão de linhas,
-        # não apenas por texto do cabeçalho.
-
-        # Alguns chars só respondem bem com %20 (quote) em vez de + (quote_plus).
-        enc_quote = quote(name, safe="")
-        enc_plus = quote_plus(name)
-
-        url_variants = [
-            GUILDSTATS_EXP_URL.format(name=enc_quote),
-            GUILDSTATS_EXP_URL.format(name=enc_plus),
-        ]
-
-        # headers um pouco mais "browser-like" para reduzir bloqueios.
-        headers = dict(UA)
-        headers.update({
-            "Referer": "https://guildstats.eu/",
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache",
-        })
-
-        def fetch_html(u: str) -> str:
-            try:
-                txt = _get_text(u, timeout=timeout, headers=headers)
-                if not txt:
-                    return ""
-                # Detecta páginas de bloqueio/anti-bot (para não tentar parsear "lixo").
-                low = txt.lower()
-                block_markers = (
-                    'checking your browser',
-                    'just a moment',
-                    'cf-browser-verification',
-                    'attention required',
-                    'verify you are human',
-                    'enable javascript',
-                )
-                if any(m in low for m in block_markers):
-                    return ''
-                return txt
-            except Exception:
-                return ""
-
-        html = ""
-        # Tenta sem idioma e com pt/en (algumas páginas mudam layout/texto com lang)
-        for base_url in url_variants:
-            for u in (base_url, base_url + "&lang=pt", base_url + "&lang=en"):
-                html = fetch_html(u)
-                if html:
-                    break
-            if html:
-                break
-
+        # O GuildStats e um fansite e, no Android, o acesso direto ao tab=9 pode
+        # voltar para a pagina base do personagem ou vir sem a tabela de Experience.
+        # Para ficar mais robusto, abrimos primeiro a pagina base do char com uma
+        # sessao browser-like e depois seguimos para a aba 9 na mesma sessao/cookies.
+        html = _fetch_guildstats_exp_html(name, timeout=timeout)
         if not html:
             return []
 
