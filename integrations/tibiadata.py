@@ -562,7 +562,7 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                     if score > best_score:
                         best_score = score
                         best = chunk
-                return best if best_score >= 3 else ""
+                return best if best_score >= 1 else ""
 
             def _parse_rows_from_flat_text(fragment: str) -> List[Dict[str, Any]]:
                 text_flat = _flatten_html_text(fragment)
@@ -623,14 +623,14 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 return rows
 
             fast_rows = _parse_rows(html)
-            if len(fast_rows) < 3:
+            if len(fast_rows) < 1:
                 frag = _extract_best_table_fragment(html)
                 if frag:
                     alt = _parse_rows(frag)
                     if len(alt) > len(fast_rows):
                         fast_rows = alt
 
-            if len(fast_rows) < 3:
+            if len(fast_rows) < 1:
                 # Fallback textual para quando o GuildStats muda o markup da tabela
                 # (por exemplo, linhas renderizadas em div/span). Isso é importante no Android,
                 # onde light_only evita o BeautifulSoup completo.
@@ -638,7 +638,7 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 if len(alt_text) > len(fast_rows):
                     fast_rows = alt_text
 
-            if len(fast_rows) >= 3:
+            if len(fast_rows) >= 1:
                 return fast_rows
             if light_only and fast_rows:
                 return fast_rows
@@ -699,7 +699,7 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 'exp_change_int': int(exp_int),
             })
 
-        if len(fast_rows) >= 3:
+        if len(fast_rows) >= 1:
             return fast_rows
 
         # Heurística robusta: escolhe a tabela em que muitas linhas possuem uma data ISO
@@ -734,7 +734,7 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
 
             date_idx = max(range(max_cols), key=lambda i: date_counts[i])
             # Alguns chars podem ter poucos registros (tracking recente).
-            if date_counts[date_idx] < 3:
+            if date_counts[date_idx] < 1:
                 continue
 
             # pontua colunas de EXP
@@ -766,7 +766,7 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                     if v.lstrip().startswith(("+", "-")):
                         plusminus += 1
 
-                if exp_count < 3:
+                if exp_count < 1:
                     col_scores.append((-1, ci))
                     continue
 

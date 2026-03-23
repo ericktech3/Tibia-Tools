@@ -34,3 +34,29 @@ class GuildStatsExpHistoryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+TWO_ROW_TABLE_HTML = """
+<html>
+  <body>
+    <table>
+      <tr><th>Date</th><th>Exp change</th><th>Lvl</th></tr>
+      <tr><td>2026-03-20</td><td>+452,409</td><td>330</td></tr>
+      <tr><td>2026-03-21</td><td>0</td><td>330</td></tr>
+    </table>
+  </body>
+</html>
+"""
+
+
+class GuildStatsSmallHistoryTests(unittest.TestCase):
+    @patch("integrations.tibiadata._get_text", return_value=TWO_ROW_TABLE_HTML)
+    def test_light_only_accepts_history_with_two_rows(self, _mock_get_text):
+        rows = fetch_guildstats_exp_changes("Elder Tree", light_only=True)
+        self.assertEqual(
+            rows,
+            [
+                {"date": "2026-03-20", "exp_change": "+452,409", "exp_change_int": 452409},
+                {"date": "2026-03-21", "exp_change": "0", "exp_change_int": 0},
+            ],
+        )
