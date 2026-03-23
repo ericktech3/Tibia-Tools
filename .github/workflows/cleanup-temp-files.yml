@@ -1,0 +1,52 @@
+name: Cleanup temp files
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 0" # domingo 03:00 UTC
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Remove unnecessary files
+        run: |
+          set -e
+
+          echo "Removendo caches Python..."
+          find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+          find . -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*$py.class" \) -delete
+
+          echo "Removendo caches de ferramentas..."
+          rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage coverage.xml
+
+          echo "Removendo arquivos temporarios..."
+          find . -type f \( -name "*.log" -o -name "*.tmp" -o -name "*.temp" \) -delete
+          find . -type d \( -name "tmp" -o -name "temp" \) -prune -exec rm -rf {} +
+
+          echo "Removendo lixo de sistema/editor..."
+          find . -type f \( -name ".DS_Store" -o -name "Thumbs.db" -o -name "*.swp" -o -name "*.swo" \) -delete
+
+          # Descomente se quiser limpeza mais agressiva de artefatos gerados
+          # rm -rf .buildozer bin build dist .gradle
+
+      - name: Commit changes
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "Nenhuma mudanca para commitar."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "chore: remove temporary and cache files"
+          git push
