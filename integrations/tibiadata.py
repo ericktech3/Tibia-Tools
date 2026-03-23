@@ -644,14 +644,12 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
 
             if len(fast_rows) >= 1:
                 return fast_rows
-            if light_only and fast_rows:
-                return fast_rows
         except Exception:
             pass
 
-        if light_only:
-            return []
-
+        # Mesmo no Android (light_only), ainda tentamos o BeautifulSoup como fallback.
+        # O caminho "leve" cobre a maioria dos casos, mas o GuildStats às vezes devolve
+        # um HTML que só o parser do BeautifulSoup consegue normalizar.
         soup = BeautifulSoup(html, "html.parser")
 
         def parse_exp_to_int(s: str) -> Optional[int]:

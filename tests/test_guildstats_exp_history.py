@@ -62,21 +62,35 @@ class GuildStatsSmallHistoryTests(unittest.TestCase):
         )
 
 
-BEAUTIFULSOUP_ONLY_HTML = """
-<html>
-  <body>
-    <table>
-      <tr><td><span>2026-03-20</span></td><td><span>gain</span><span> +452,409</span></td><td><span>330</span></td></tr>
-      <tr><td><span>2026-03-21</span></td><td><span>stable</span><span> 0</span></td><td><span>330</span></td></tr>
-    </table>
-  </body>
-</html>
-"""
+class _FakeCell:
+    def __init__(self, text: str):
+        self._text = text
+
+    def get_text(self, sep: str = " ", strip: bool = True):
+        return self._text
+
+
+class _FakeTr:
+    def __init__(self, cells):
+        self._cells = [_FakeCell(c) for c in cells]
+
+    def find_all(self, tags):
+        return self._cells
+
+
+class _FakeSoup:
+    def find_all(self, tag):
+        if tag == 'tr':
+            return [_FakeTr(["2026-03-20", "gain +452,409", "330"]), _FakeTr(["2026-03-21", "stable 0", "330"])]
+        if tag == 'table':
+            return []
+        return []
 
 
 class GuildStatsAndroidFallbackTests(unittest.TestCase):
-    @patch("integrations.tibiadata._get_text", return_value=BEAUTIFULSOUP_ONLY_HTML)
-    def test_light_only_falls_back_to_beautifulsoup_when_fast_path_fails(self, _mock_get_text):
+    @patch("integrations.tibiadata.BeautifulSoup", return_value=_FakeSoup())
+    @patch("integrations.tibiadata._get_text", return_value="<html></html>")
+    def test_light_only_falls_back_to_beautifulsoup_when_fast_path_fails(self, _mock_get_text, _mock_bs4):
         rows = fetch_guildstats_exp_changes("Elder Tree", light_only=True)
         self.assertEqual(
             rows,
