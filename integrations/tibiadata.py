@@ -76,7 +76,12 @@ def _get_text(url: str, timeout: int, headers: Optional[dict] = None) -> str:
     last_exc: Exception | None = None
     for attempt in range(3):
         try:
-            r = requests.get(url, timeout=timeout, headers=hdr)
+            try:
+                r = requests.get(url, timeout=timeout, headers=hdr)
+            except requests.exceptions.SSLError:
+                # Fansites podem falhar em alguns builds Android com OpenSSL/CA antigos.
+                # Como é uma fonte auxiliar e somente leitura, tentamos novamente sem verify.
+                r = requests.get(url, timeout=timeout, headers=hdr, verify=False)
             if int(getattr(r, "status_code", 0) or 0) >= 500:
                 raise requests.HTTPError(f"HTTP {r.status_code}", response=r)
             if r.status_code != 200:
@@ -296,9 +301,8 @@ def fetch_guildstats_deaths_xp(name: str, timeout: int = 12, *, light_only: bool
         except Exception:
             pass
 
-        if light_only:
-            return []
-
+        # Mesmo no Android, se o parser leve falhar, tentamos o BeautifulSoup.
+        # Essa busca já roda em background thread, então priorizamos robustez.
         soup = BeautifulSoup(html, "html.parser")
 
         def norm(s: str) -> str:

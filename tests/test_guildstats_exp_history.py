@@ -60,3 +60,28 @@ class GuildStatsSmallHistoryTests(unittest.TestCase):
                 {"date": "2026-03-21", "exp_change": "0", "exp_change_int": 0},
             ],
         )
+
+
+BEAUTIFULSOUP_ONLY_HTML = """
+<html>
+  <body>
+    <table>
+      <tr><td><span>2026-03-20</span></td><td><span>gain</span><span> +452,409</span></td><td><span>330</span></td></tr>
+      <tr><td><span>2026-03-21</span></td><td><span>stable</span><span> 0</span></td><td><span>330</span></td></tr>
+    </table>
+  </body>
+</html>
+"""
+
+
+class GuildStatsAndroidFallbackTests(unittest.TestCase):
+    @patch("integrations.tibiadata._get_text", return_value=BEAUTIFULSOUP_ONLY_HTML)
+    def test_light_only_falls_back_to_beautifulsoup_when_fast_path_fails(self, _mock_get_text):
+        rows = fetch_guildstats_exp_changes("Elder Tree", light_only=True)
+        self.assertEqual(
+            rows,
+            [
+                {"date": "2026-03-20", "exp_change": "gain +452,409", "exp_change_int": 452409},
+                {"date": "2026-03-21", "exp_change": "stable 0", "exp_change_int": 0},
+            ],
+        )
