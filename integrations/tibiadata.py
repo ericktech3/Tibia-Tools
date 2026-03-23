@@ -478,6 +478,22 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 t = re.sub(r"\s+", " ", t).strip()
                 return t
 
+            def _flatten_html_text(s: str) -> str:
+                t = s or ""
+                t = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", t)
+                # Alguns layouts mais novos usam div/span em vez de tabela.
+                # Mantemos um texto linear para extrair blocos entre datas.
+                t = re.sub(r"(?i)<br\s*/?>", " ", t)
+                t = re.sub(r"(?i)</?(tr|td|th|table|tbody|thead|tfoot|div|p|li|ul|ol|section|article|h[1-6])[^>]*>", " ", t)
+                t = re.sub(r"(?is)<[^>]+>", " ", t)
+                try:
+                    t = _html.unescape(t)
+                except Exception:
+                    pass
+                t = t.replace(" ", " ")
+                t = re.sub(r"\s+", " ", t).strip()
+                return t
+
             def _parse_rows(fragment: str) -> List[Dict[str, Any]]:
                 rows: List[Dict[str, Any]] = []
                 seen_dates = set()
@@ -548,6 +564,64 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                         best = chunk
                 return best if best_score >= 3 else ""
 
+            def _parse_rows_from_flat_text(fragment: str) -> List[Dict[str, Any]]:
+                text_flat = _flatten_html_text(fragment)
+                if not text_flat:
+                    return []
+
+                rows: List[Dict[str, Any]] = []
+                seen_dates = set()
+                # O texto linearizado costuma ficar assim:
+                #   2025-09-20 0 638 ... 2025-09-21 +123,456 639 ...
+                # então parseamos por blocos entre datas.
+                date_block_re = re.compile(
+                    r"(?P<date>\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4})\b)(?P<body>.*?)(?=(?:\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4})\b)|$)",
+                    re.S,
+                )
+
+                for mblk in date_block_re.finditer(text_flat):
+                    date_iso = _extract_date_iso(mblk.group('date') or '')
+                    if not date_iso or date_iso in seen_dates:
+                        continue
+
+                    body = str(mblk.group('body') or '')
+                    if not body.strip():
+                        continue
+
+                    body_norm = re.sub(r"\s+", " ", body).strip()
+                    exp_txt = ""
+                    if body_norm.startswith(("+", "-")):
+                        sign = body_norm[0]
+                        rest = body_norm[1:].lstrip()
+                        mnum = re.match(r"\d[\d,.]*", rest)
+                        if mnum:
+                            exp_txt = sign + str(mnum.group(0) or "")
+                    elif re.match(r"^0(?:\D|$)", body_norm):
+                        exp_txt = "0"
+                    else:
+                        # fallback: procura um delta explícito logo no começo do bloco
+                        signed = re.search(r"^[^\d+-]{0,16}([+-])\s*(\d[\d,.]*)", body_norm)
+                        if signed:
+                            exp_txt = f"{signed.group(1)}{signed.group(2)}"
+
+                    if not exp_txt:
+                        continue
+
+                    exp_int = _parse_exp_to_int_fast(exp_txt)
+                    if exp_int is None:
+                        continue
+                    if abs(int(exp_int)) not in (0,) and abs(int(exp_int)) < 10_000:
+                        continue
+
+                    seen_dates.add(date_iso)
+                    rows.append({
+                        'date': date_iso,
+                        'exp_change': exp_txt,
+                        'exp_change_int': int(exp_int),
+                    })
+
+                return rows
+
             fast_rows = _parse_rows(html)
             if len(fast_rows) < 3:
                 frag = _extract_best_table_fragment(html)
@@ -555,6 +629,14 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                     alt = _parse_rows(frag)
                     if len(alt) > len(fast_rows):
                         fast_rows = alt
+
+            if len(fast_rows) < 3:
+                # Fallback textual para quando o GuildStats muda o markup da tabela
+                # (por exemplo, linhas renderizadas em div/span). Isso é importante no Android,
+                # onde light_only evita o BeautifulSoup completo.
+                alt_text = _parse_rows_from_flat_text(html)
+                if len(alt_text) > len(fast_rows):
+                    fast_rows = alt_text
 
             if len(fast_rows) >= 3:
                 return fast_rows
