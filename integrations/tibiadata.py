@@ -173,11 +173,36 @@ def _looks_like_guildstats_exp_page(html_text: str) -> bool:
     plain = _html_to_plain_text(html_text).lower()
     if not plain:
         return False
-    if "date exp change" in plain:
+
+    direct_markers = (
+        "date exp change",
+        "data mudança de exp",
+        "data mudanca de exp",
+    )
+    if any(marker in plain for marker in direct_markers):
         return True
-    if "total in month" in plain and "avg exp per hour" in plain:
+
+    if (
+        ("total in month" in plain or "total no mês" in plain or "total no mes" in plain)
+        and (
+            "avg exp per hour" in plain
+            or "exp média por hora" in plain
+            or "exp media por hora" in plain
+            or "vocation rank" in plain
+            or "rank da vocação" in plain
+            or "rank da vocacao" in plain
+        )
+    ):
         return True
-    if "exp change" in plain and re.search(r"\b\d{4}-\d{2}-\d{2}\b", plain):
+
+    if "best recorded day" in plain and "average daily exp" in plain:
+        return True
+
+    if re.search(r"\bdate\b.*\bexp\s+change\b.*\bexperience\b", plain):
+        return True
+    if re.search(r"\bdata\b.*\bexp\b.*\bexperi", plain):
+        return True
+    if re.search(r"\b\d{4}-\d{2}-\d{2}\b", plain) and ("vocation rank" in plain or "time on-line" in plain):
         return True
     return False
 
@@ -213,6 +238,21 @@ def _unique_preserve_order(urls: List[str]) -> List[str]:
     return out
 
 
+
+def _diag_log(message: str) -> None:
+    try:
+        print(f"[gs-exp] {message}")
+    except Exception:
+        pass
+
+
+def _log_preview(text: str, limit: int = 220) -> str:
+    raw = str(text or "").replace("\n", " ").replace("\r", " ")
+    raw = re.sub(r"\s+", " ", raw).strip()
+    if len(raw) <= limit:
+        return raw
+    return raw[:limit] + " ..."
+
 def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
     enc_quote = quote(name, safe="")
     enc_plus = quote_plus(name)
@@ -243,14 +283,19 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
         "Accept-Language": UA.get("Accept-Language", "en-US,en;q=0.8"),
     }
 
+    _diag_log(f"fetch start name={name!r}")
+
     base_html = ""
-    # More reliable flow on GuildStats: open the character base page first and
-    # only then follow the Experience tab using the same session/cookies.
-    for u in _unique_preserve_order(base_urls):
-        txt = _session_get_text(session, u, timeout=timeout, headers=headers)
-        if not txt or _guildstats_blocked_or_empty(txt):
+    for url in _unique_preserve_order(base_urls):
+        txt = _session_get_text(session, url, timeout=timeout, headers=headers)
+        if not txt:
+            _diag_log(f"base empty url={url}")
+            continue
+        if _guildstats_blocked_or_empty(txt):
+            _diag_log(f"base blocked url={url} snippet={_log_preview(_html_to_plain_text(txt))}")
             continue
         base_html = txt
+        _diag_log(f"base ok url={url} len={len(txt)} snippet={_log_preview(_html_to_plain_text(txt))}")
         break
 
     candidate_urls: List[str] = []
@@ -261,9 +306,13 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
 
     best_html = ""
     best_score = -1
-    for u in _unique_preserve_order(candidate_urls):
-        txt = _session_get_text(session, u, timeout=timeout, headers=headers)
-        if not txt or _guildstats_blocked_or_empty(txt):
+    for url in _unique_preserve_order(candidate_urls):
+        txt = _session_get_text(session, url, timeout=timeout, headers=headers)
+        if not txt:
+            _diag_log(f"tab empty url={url}")
+            continue
+        if _guildstats_blocked_or_empty(txt):
+            _diag_log(f"tab blocked url={url} snippet={_log_preview(_html_to_plain_text(txt))}")
             continue
 
         plain = _html_to_plain_text(txt).lower()
@@ -276,12 +325,21 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
         if "total in month" in plain:
             score += 50
 
+        _diag_log(
+            f"tab ok url={url} len={len(txt)} score={score} looks_exp={_looks_like_guildstats_exp_page(txt)} "
+            f"snippet={_log_preview(plain)}"
+        )
+
         if score > best_score:
             best_html = txt
             best_score = score
         if score >= 1000:
             break
 
+    if best_html:
+        _diag_log(f"selected exp html score={best_score}")
+    else:
+        _diag_log("no usable exp html found")
     return best_html
 
 
@@ -537,6 +595,7 @@ def fetch_guildstats_deaths_xp(name: str, timeout: int = 12, *, light_only: bool
                 best = (table, exp_idx, score)
 
         if not best:
+            _diag_log(f"no table selected after BeautifulSoup snippet={_log_preview(_html_to_plain_text(html), 260)}")
             return []
 
         table, exp_idx, _score = best
@@ -556,8 +615,13 @@ def fetch_guildstats_deaths_xp(name: str, timeout: int = 12, *, light_only: bool
             out.append(xp)
 
         # Normalmente a primeira linha é a mais recente; mantemos a ordem.
+        if out:
+            _diag_log(f"beautifulsoup heuristic rows={len(out)}")
+        else:
+            _diag_log(f"no rows after all parsers snippet={_log_preview(_html_to_plain_text(html), 260)}")
         return out
-    except Exception:
+    except Exception as exc:
+        _diag_log(f"exception while parsing name={name!r} error={exc!r}")
         return []
 
 
@@ -576,7 +640,9 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
         # sessao browser-like e depois seguimos para a aba 9 na mesma sessao/cookies.
         html = _fetch_guildstats_exp_html(name, timeout=timeout)
         if not html:
+            _diag_log(f"no html for name={name!r}")
             return []
+        _diag_log(f"html fetched len={len(html)} snippet={_log_preview(_html_to_plain_text(html), 260)}")
 
         # Fast path: tenta extrair a tabela via regex (sem BeautifulSoup) — bem mais leve no Android
         # (robusto: não assume que Date/Exp são sempre as colunas 0/1)
@@ -710,20 +776,67 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                         best = chunk
                 return best if best_score >= 1 else ""
 
-            def _parse_rows_from_flat_text(fragment: str) -> List[Dict[str, Any]]:
+            def _extract_exp_section_text(fragment: str) -> str:
                 text_flat = _flatten_html_text(fragment)
+                if not text_flat:
+                    return ""
+
+                low = text_flat.lower()
+                header_patterns = [
+                    re.compile(r"date\s+exp\s+change", re.I),
+                    re.compile(r"data\s+mudan[çc]a\s+de\s+exp", re.I),
+                ]
+                start_idx = -1
+                for pattern in header_patterns:
+                    m_header = pattern.search(low)
+                    if m_header:
+                        start_idx = int(m_header.start())
+                        break
+
+                if start_idx == -1:
+                    for marker in ("average daily exp", "média diária de exp", "media diaria de exp"):
+                        pos = low.find(marker)
+                        if pos != -1:
+                            start_idx = pos
+                            break
+
+                if start_idx == -1:
+                    return text_flat
+
+                sliced = text_flat[start_idx:].strip()
+                low_sliced = sliced.lower()
+                footer_positions = []
+                for marker in (
+                    "total in month",
+                    "total no mês",
+                    "total no mes",
+                    "guildstats.eu",
+                    "partners compare characters",
+                ):
+                    pos = low_sliced.find(marker)
+                    if pos != -1:
+                        footer_positions.append(pos)
+                if footer_positions:
+                    sliced = sliced[:min(footer_positions)].strip()
+                return sliced
+
+            def _parse_rows_from_flat_text(fragment: str) -> List[Dict[str, Any]]:
+                text_flat = _extract_exp_section_text(fragment)
+                if not text_flat:
+                    text_flat = _flatten_html_text(fragment)
                 if not text_flat:
                     return []
 
                 rows: List[Dict[str, Any]] = []
                 seen_dates = set()
                 # O texto linearizado costuma ficar assim:
-                #   2025-09-20 0 638 ... 2025-09-21 +123,456 639 ...
-                # então parseamos por blocos entre datas.
+                #   Date Exp change ... 2025-09-20 +123,456 638 ... 2025-09-21 0 639 ...
+                # ou, no layout responsivo novo, em cards/listas com labels antes do valor.
                 date_block_re = re.compile(
                     r"(?P<date>\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4})\b)(?P<body>.*?)(?=(?:\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4})\b)|$)",
                     re.S,
                 )
+                token_re = re.compile(r"(?<!\d)([+-]\s*\d[\d,.]*|\b0\b|\d[\d,.]*)(?!\d)")
 
                 for mblk in date_block_re.finditer(text_flat):
                     date_iso = _extract_date_iso(mblk.group('date') or '')
@@ -735,21 +848,41 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                         continue
 
                     body_norm = re.sub(r"\s+", " ", body).strip()
-                    exp_txt = ""
-                    if body_norm.startswith(("+", "-")):
-                        sign = body_norm[0]
-                        rest = body_norm[1:].lstrip()
-                        mnum = re.match(r"\d[\d,.]*", rest)
-                        if mnum:
-                            exp_txt = sign + str(mnum.group(0) or "")
-                    elif re.match(r"^0(?:\D|$)", body_norm):
-                        exp_txt = "0"
-                    else:
-                        # fallback: procura um delta explícito logo no começo do bloco
-                        signed = re.search(r"^[^\d+-]{0,16}([+-])\s*(\d[\d,.]*)", body_norm)
-                        if signed:
-                            exp_txt = f"{signed.group(1)}{signed.group(2)}"
+                    body_norm = re.sub(r"\(\s*[+-]\s*\d[\d,.]*\s*\)", " ", body_norm)
+                    body_norm = re.sub(r"(?i)\bview on tibia\.com\b", " ", body_norm)
+                    body_norm = re.sub(
+                        r"(?i)\b(?:vocation rank|rank da vocação|rank da vocacao|lvl|level|experience|time on-?line|avg exp per hour|average daily exp|média diária de exp|media diaria de exp)\b",
+                        " ",
+                        body_norm,
+                    )
+                    body_norm = re.sub(r"\s+", " ", body_norm).strip()
 
+                    exp_txt = ""
+                    fallback_zero = ""
+                    fallback_unsigned = ""
+
+                    for mnum in token_re.finditer(body_norm):
+                        raw = str(mnum.group(1) or "").strip()
+                        exp_int = _parse_exp_to_int_fast(raw)
+                        if exp_int is None:
+                            continue
+                        abs_int = abs(int(exp_int))
+
+                        if raw.lstrip().startswith(("+", "-")) and abs_int >= 10_000:
+                            exp_txt = raw.replace(" ", "")
+                            break
+
+                        if int(exp_int) == 0 and not fallback_zero:
+                            fallback_zero = "0"
+                            continue
+
+                        # Fallback para layouts novos que omitem o sinal do delta.
+                        # Mantemos um teto para não confundir com a coluna de EXP total.
+                        if not raw.lstrip().startswith(("+", "-")) and 10_000 <= abs_int <= 500_000_000 and not fallback_unsigned:
+                            fallback_unsigned = raw.replace(" ", "")
+
+                    if not exp_txt:
+                        exp_txt = fallback_zero or fallback_unsigned
                     if not exp_txt:
                         continue
 
@@ -768,6 +901,42 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
 
                 return rows
 
+            def _format_exp_text(value: int) -> str:
+                if int(value) == 0:
+                    return "0"
+                return f"{int(value):+,}"
+
+            def _parse_rows_from_js(fragment: str) -> List[Dict[str, Any]]:
+                scripts = "\n".join(re.findall(r"(?is)<script[^>]*>(.*?)</script>", fragment or ""))
+                haystack = scripts or (fragment or "")
+                rows: List[Dict[str, Any]] = []
+                seen_dates = set()
+                patterns = [
+                    re.compile(r"[\"']date[\"']\s*:\s*[\"'](?P<date>\d{4}-\d{2}-\d{2})[\"'][^{}\n]{0,240}?[\"'](?:exp[_ ]?change|expChange|value|gain|y)[\"']\s*:\s*[\"']?(?P<value>[+-]?\d[\d,\.]*)", re.I),
+                    re.compile(r"\[\s*[\"'](?P<date>\d{4}-\d{2}-\d{2})[\"']\s*,\s*[\"']?(?P<value>[+-]?\d[\d,\.]*)[\"']?\s*\]", re.I),
+                    re.compile(r"[\"'](?P<date>\d{4}-\d{2}-\d{2})[\"']\s*,\s*[\"']?(?P<value>[+-]?\d[\d,\.]*)[\"']?", re.I),
+                ]
+                for pattern in patterns:
+                    for match in pattern.finditer(haystack):
+                        date_iso = str(match.group('date') or '').strip()
+                        if not date_iso or date_iso in seen_dates:
+                            continue
+                        raw_value = str(match.group('value') or '').strip()
+                        exp_int = _parse_exp_to_int_fast(raw_value)
+                        if exp_int is None:
+                            continue
+                        if abs(int(exp_int)) not in (0,) and abs(int(exp_int)) < 10_000:
+                            continue
+                        seen_dates.add(date_iso)
+                        rows.append({
+                            'date': date_iso,
+                            'exp_change': _format_exp_text(int(exp_int)),
+                            'exp_change_int': int(exp_int),
+                        })
+                    if rows:
+                        break
+                return rows
+
             fast_rows = _parse_rows(html)
             if len(fast_rows) < 1:
                 frag = _extract_best_table_fragment(html)
@@ -784,11 +953,19 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 if len(alt_text) > len(fast_rows):
                     fast_rows = alt_text
 
+            if len(fast_rows) < 1:
+                # Extra fallback: alguns layouts guardam os pontos em script/JSON.
+                alt_js = _parse_rows_from_js(html)
+                if len(alt_js) > len(fast_rows):
+                    fast_rows = alt_js
+
             if len(fast_rows) >= 1:
+                _diag_log(f"fast parser rows={len(fast_rows)}")
                 return fast_rows
         except Exception:
             pass
 
+        _diag_log("fast parser returned 0 rows; trying BeautifulSoup fallback")
         # Mesmo no Android (light_only), ainda tentamos o BeautifulSoup como fallback.
         # O caminho "leve" cobre a maioria dos casos, mas o GuildStats às vezes devolve
         # um HTML que só o parser do BeautifulSoup consegue normalizar.
@@ -844,6 +1021,7 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
             })
 
         if len(fast_rows) >= 1:
+            _diag_log(f"beautifulsoup simple rows={len(fast_rows)}")
             return fast_rows
 
         # Heurística robusta: escolhe a tabela em que muitas linhas possuem uma data ISO
@@ -944,6 +1122,7 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 best = (table, date_idx, exp_idx, table_score)
 
         if not best:
+            _diag_log(f"no table selected after BeautifulSoup snippet={_log_preview(_html_to_plain_text(html), 260)}")
             return []
 
         table, date_idx, exp_idx, _score = best
@@ -977,8 +1156,13 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 "exp_change_int": int(exp_int),
             })
 
+        if out:
+            _diag_log(f"beautifulsoup heuristic rows={len(out)}")
+        else:
+            _diag_log(f"no rows after all parsers snippet={_log_preview(_html_to_plain_text(html), 260)}")
         return out
-    except Exception:
+    except Exception as exc:
+        _diag_log(f"exception while parsing name={name!r} error={exc!r}")
         return []
 
 
