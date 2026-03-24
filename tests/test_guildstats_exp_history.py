@@ -101,6 +101,91 @@ class GuildStatsAndroidFallbackTests(unittest.TestCase):
         )
 
 
+SCRIPT_BASED_EXP_HTML = """
+<html>
+  <body>
+    <script>
+      const expSeries = [
+        ["2026-03-20", 452409],
+        ["2026-03-21", 0],
+        ["2026-03-22", -2248219]
+      ];
+    </script>
+  </body>
+</html>
+"""
+
+
+class GuildStatsScriptFallbackTests(unittest.TestCase):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value=SCRIPT_BASED_EXP_HTML)
+    def test_light_only_parses_script_based_experience_history(self, _mock_fetch_html):
+        rows = fetch_guildstats_exp_changes("Elder Tree", light_only=True)
+        self.assertEqual(
+            rows,
+            [
+                {"date": "2026-03-20", "exp_change": "+452,409", "exp_change_int": 452409},
+                {"date": "2026-03-21", "exp_change": "0", "exp_change_int": 0},
+                {"date": "2026-03-22", "exp_change": "-2,248,219", "exp_change_int": -2248219},
+            ],
+        )
+
+
+RESPONSIVE_EXP_HTML = """
+<html>
+  <body>
+    <div>Menu</div>
+    <div>Date Best recorded day * Rank Lvl</div>
+    <div>2025-04-21 +9,806,361 7 147</div>
+    <div>Level prediction Average daily exp</div>
+    <div>Date Exp change Vocation rank Lvl Experience Time on-line Avg exp per hour</div>
+    <div>2026-03-10 View on Tibia.com +946,476 162 (+2) 158 64,434,244 0</div>
+    <div>2026-03-11 card item +315,053 164 (-2) 159 (+1) 64,749,297 15min 1,260,212/h</div>
+    <div>2026-03-12 mobile card 0 165 (-1) 159 65,066,344 0</div>
+    <div>Total in month +1,261,529 -8 +1</div>
+  </body>
+</html>
+"""
+
+
+class GuildStatsResponsiveLayoutTests(unittest.TestCase):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value=RESPONSIVE_EXP_HTML)
+    def test_light_only_parses_current_responsive_text_layout(self, _mock_fetch_html):
+        rows = fetch_guildstats_exp_changes("Elder Tree", light_only=True)
+        self.assertEqual(
+            rows,
+            [
+                {"date": "2026-03-10", "exp_change": "+946,476", "exp_change_int": 946476},
+                {"date": "2026-03-11", "exp_change": "+315,053", "exp_change_int": 315053},
+                {"date": "2026-03-12", "exp_change": "0", "exp_change_int": 0},
+            ],
+        )
+
+
+REORDERED_RESPONSIVE_EXP_HTML = """
+<html>
+  <body>
+    <div>Date Exp change Vocation rank Lvl Experience Time on-line Avg exp per hour</div>
+    <div>2026-03-20 card Rank 167 (+1) Level 556 Change +12,345,678 Experience 889,000,000 Time on-line 1h</div>
+    <div>2026-03-21 card Rank 168 (-1) Level 556 Change 0 Experience 889,000,000 Time on-line 0</div>
+    <div>Total in month +12,345,678</div>
+  </body>
+</html>
+"""
+
+
+class GuildStatsReorderedCardLayoutTests(unittest.TestCase):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value=REORDERED_RESPONSIVE_EXP_HTML)
+    def test_light_only_ignores_rank_deltas_and_finds_exp_later_in_block(self, _mock_fetch_html):
+        rows = fetch_guildstats_exp_changes("Elder Tree", light_only=True)
+        self.assertEqual(
+            rows,
+            [
+                {"date": "2026-03-20", "exp_change": "+12,345,678", "exp_change_int": 12345678},
+                {"date": "2026-03-21", "exp_change": "0", "exp_change_int": 0},
+            ],
+        )
+
+
 BASE_CHARACTER_HTML = """
 <html>
   <body>
