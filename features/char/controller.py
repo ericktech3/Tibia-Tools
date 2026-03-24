@@ -1485,13 +1485,26 @@ class CharControllerMixin:
                         key = f"gs_exp_rows:{(title or name).strip().lower()}"
                         rows = self._cache_get(key, ttl_seconds=10 * 60)
                         if rows is None:
+                            try:
+                                print(f"[gs-exp-ui] cache miss name={(title or name)!r}")
+                            except Exception:
+                                pass
                             rows = fetch_guildstats_exp_changes(title or name, light_only=self._is_android())
+                            try:
+                                print(f"[gs-exp-ui] fetched rows={len(rows or [])} name={(title or name)!r}")
+                            except Exception:
+                                pass
                             try:
                                 # Nao mantemos lista vazia em cache por muito tempo: se o fansite
                                 # falhar temporariamente, a proxima abertura do char deve poder
                                 # tentar novamente em vez de prender a UI por 10 minutos.
                                 if rows:
                                     self._cache_set(key, rows)
+                            except Exception:
+                                pass
+                        else:
+                            try:
+                                print(f"[gs-exp-ui] cache hit rows={len(rows or [])} name={(title or name)!r}")
                             except Exception:
                                 pass
     
