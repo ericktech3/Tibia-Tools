@@ -860,6 +860,25 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                     exp_txt = ""
                     fallback_zero = ""
                     fallback_unsigned = ""
+                    fallback_signed_small = ""
+                    leading_candidate = ""
+
+                    labeled_match = re.search(
+                        r"(?i)\b(?:exp\s*change|change|mudan[çc]a\s+de\s+exp)\b[^0-9+-]{0,20}(?P<value>[+-]?\s*\d[\d,.]*)",
+                        body,
+                    )
+                    if labeled_match:
+                        labeled_raw = str(labeled_match.group('value') or '').strip()
+                        labeled_int = _parse_exp_to_int_fast(labeled_raw)
+                        if labeled_int is not None:
+                            exp_txt = labeled_raw.replace(" ", "")
+
+                    first_token = token_re.search(body_norm)
+                    if first_token:
+                        raw0 = str(first_token.group(1) or '').strip()
+                        exp0 = _parse_exp_to_int_fast(raw0)
+                        if exp0 is not None and (raw0.lstrip().startswith(("+", "-")) or int(exp0) == 0):
+                            leading_candidate = raw0.replace(" ", "")
 
                     for mnum in token_re.finditer(body_norm):
                         raw = str(mnum.group(1) or "").strip()
@@ -872,6 +891,10 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                             exp_txt = raw.replace(" ", "")
                             break
 
+                        if raw.lstrip().startswith(("+", "-")) and abs_int < 10_000 and not fallback_signed_small:
+                            fallback_signed_small = raw.replace(" ", "")
+                            continue
+
                         if int(exp_int) == 0 and not fallback_zero:
                             fallback_zero = "0"
                             continue
@@ -882,14 +905,14 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                             fallback_unsigned = raw.replace(" ", "")
 
                     if not exp_txt:
-                        exp_txt = fallback_zero or fallback_unsigned
+                        exp_txt = leading_candidate or fallback_signed_small or fallback_zero or fallback_unsigned
                     if not exp_txt:
                         continue
 
                     exp_int = _parse_exp_to_int_fast(exp_txt)
                     if exp_int is None:
                         continue
-                    if abs(int(exp_int)) not in (0,) and abs(int(exp_int)) < 10_000:
+                    if abs(int(exp_int)) not in (0,) and abs(int(exp_int)) < 10_000 and exp_txt not in (leading_candidate, fallback_signed_small):
                         continue
 
                     seen_dates.add(date_iso)
@@ -937,31 +960,186 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                         break
                 return rows
 
-            fast_rows = _parse_rows(html)
-            if len(fast_rows) < 1:
-                frag = _extract_best_table_fragment(html)
-                if frag:
-                    alt = _parse_rows(frag)
-                    if len(alt) > len(fast_rows):
-                        fast_rows = alt
+            def _rows_quality(rows: List[Dict[str, Any]], *, hint: int = 0) -> int:
+                if not rows:
+                    return -(10 ** 9)
+                unique_dates = {}
+                signed_count = 0
+                for row in rows:
+                    ds = str(row.get('date') or '').strip()
+                    if not ds:
+                        continue
+                    try:
+                        unique_dates[ds] = int(row.get('exp_change_int') or 0)
+                    except Exception:
+                        unique_dates[ds] = 0
+                    txt = str(row.get('exp_change') or '').lstrip()
+                    if txt.startswith(("+", "-")):
+                        signed_count += 1
+                values = [int(v) for v in unique_dates.values()]
+                nonzero = sum(1 for v in values if int(v) != 0)
+                max_abs = max((abs(int(v)) for v in values), default=0)
+                abs_sum = sum(min(abs(int(v)), 100_000_000) for v in values)
+                zero_only_penalty = 200_000 if nonzero == 0 else 0
+                huge_penalty = 120_000 if max_abs > 500_000_000 else 0
+                return (
+                    int(hint)
+                    + (len(unique_dates) * 1_000)
+                    + (nonzero * 15_000)
+                    + (signed_count * 2_500)
+                    + min(abs_sum // 1_000, 300_000)
+                    - zero_only_penalty
+                    - huge_penalty
+                )
 
-            if len(fast_rows) < 1:
-                # Fallback textual para quando o GuildStats muda o markup da tabela
-                # (por exemplo, linhas renderizadas em div/span). Isso é importante no Android,
-                # onde light_only evita o BeautifulSoup completo.
-                alt_text = _parse_rows_from_flat_text(html)
-                if len(alt_text) > len(fast_rows):
-                    fast_rows = alt_text
+            def _remember_candidate(bucket: List[Any], label: str, rows: List[Dict[str, Any]], *, hint: int = 0) -> None:
+                if not rows:
+                    return
+                score = _rows_quality(rows, hint=hint)
+                bucket.append((int(score), str(label), rows))
 
-            if len(fast_rows) < 1:
-                # Extra fallback: alguns layouts guardam os pontos em script/JSON.
-                alt_js = _parse_rows_from_js(html)
-                if len(alt_js) > len(fast_rows):
-                    fast_rows = alt_js
+            def _best_candidate(bucket: List[Any]) -> tuple[int, str, List[Dict[str, Any]]]:
+                if not bucket:
+                    return (-(10 ** 9), "", [])
+                return max(bucket, key=lambda item: int(item[0]))
 
-            if len(fast_rows) >= 1:
-                _diag_log(f"fast parser rows={len(fast_rows)}")
-                return fast_rows
+            def _normalize_label(s: str) -> str:
+                txt = (s or "").lower().strip()
+                txt = txt.replace("ç", "c").replace("ã", "a").replace("á", "a").replace("é", "e")
+                txt = re.sub(r"\s+", " ", txt)
+                return txt
+
+            def _extract_cell_attr(cell: Any, *attrs: str) -> str:
+                for attr in attrs:
+                    try:
+                        raw = cell.get(attr)
+                    except Exception:
+                        raw = None
+                    if raw is None:
+                        continue
+                    txt = re.sub(r"\s+", " ", str(raw)).strip()
+                    if txt:
+                        return txt
+                return ""
+
+            def _parse_rows_from_labeled_tables(fragment: str) -> List[Dict[str, Any]]:
+                try:
+                    soup_local = BeautifulSoup(fragment or "", "html.parser")
+                except Exception:
+                    return []
+
+                best_rows: List[Dict[str, Any]] = []
+                best_score = -(10 ** 9)
+
+                for table in soup_local.find_all("table"):
+                    tr_nodes = table.find_all("tr")
+                    if not tr_nodes:
+                        continue
+
+                    matrix_text: List[List[str]] = []
+                    matrix_cells: List[List[Any]] = []
+                    for tr in tr_nodes:
+                        cells = tr.find_all(["th", "td"])
+                        if not cells:
+                            continue
+                        texts = [re.sub(r"\s+", " ", (c.get_text(" ", strip=True) or "")).strip() for c in cells]
+                        matrix_text.append(texts)
+                        matrix_cells.append(cells)
+
+                    if not matrix_text:
+                        continue
+
+                    header_row_idx = None
+                    date_idx = None
+                    exp_idx = None
+
+                    for ri, row in enumerate(matrix_text[:4]):
+                        for ci, txt in enumerate(row):
+                            low = _normalize_label(txt)
+                            if date_idx is None and re.search(r"\b(?:date|data)\b", low):
+                                date_idx = ci
+                            if exp_idx is None and (("exp" in low and "change" in low) or "mudanca de exp" in low or re.fullmatch(r"change", low)):
+                                exp_idx = ci
+                        if date_idx is not None and exp_idx is not None and date_idx != exp_idx:
+                            header_row_idx = ri
+                            break
+
+                    if header_row_idx is None or date_idx is None or exp_idx is None or date_idx == exp_idx:
+                        continue
+
+                    rows: List[Dict[str, Any]] = []
+                    seen_dates = set()
+                    for texts, cells in zip(matrix_text[header_row_idx + 1 :], matrix_cells[header_row_idx + 1 :]):
+                        if date_idx >= len(texts) or exp_idx >= len(texts):
+                            continue
+                        if date_idx >= len(cells) or exp_idx >= len(cells):
+                            continue
+
+                        date_sources = [
+                            _extract_cell_attr(cells[date_idx], "data-sort", "data-order", "data-value", "sorttable_customkey", "title", "aria-label"),
+                            texts[date_idx],
+                        ]
+                        date_iso = None
+                        for source in date_sources:
+                            date_iso = _extract_date_iso(source)
+                            if date_iso:
+                                break
+                        if not date_iso or date_iso in seen_dates:
+                            continue
+
+                        exp_sources = [
+                            texts[exp_idx],
+                            _extract_cell_attr(cells[exp_idx], "data-sort", "data-order", "data-value", "sorttable_customkey", "title", "aria-label"),
+                        ]
+                        exp_int = None
+                        exp_txt = ""
+                        for source in exp_sources:
+                            if not source:
+                                continue
+                            parsed = _parse_exp_to_int_fast(source)
+                            if parsed is None:
+                                continue
+                            exp_int = int(parsed)
+                            exp_txt = str(source).strip()
+                            break
+                        if exp_int is None:
+                            continue
+
+                        if not exp_txt or _parse_exp_to_int_fast(exp_txt) is None or (not re.search(r"[+-]", exp_txt) and int(exp_int) != 0):
+                            exp_txt = _format_exp_text(int(exp_int))
+                        else:
+                            exp_txt = exp_txt.replace(" ", "")
+
+                        seen_dates.add(date_iso)
+                        rows.append({
+                            'date': date_iso,
+                            'exp_change': exp_txt,
+                            'exp_change_int': int(exp_int),
+                        })
+
+                    table_score = _rows_quality(rows, hint=90_000)
+                    if rows and table_score > best_score:
+                        best_score = table_score
+                        best_rows = rows
+
+                return best_rows
+
+            fast_candidates: List[Any] = []
+            _remember_candidate(fast_candidates, 'generic-tr', _parse_rows(html), hint=1_000)
+
+            frag = _extract_best_table_fragment(html)
+            if frag:
+                _remember_candidate(fast_candidates, 'best-table-fragment', _parse_rows(frag), hint=3_000)
+
+            _remember_candidate(fast_candidates, 'flat-text', _parse_rows_from_flat_text(html), hint=6_000)
+            _remember_candidate(fast_candidates, 'script-json', _parse_rows_from_js(html), hint=500)
+            _remember_candidate(fast_candidates, 'labeled-table', _parse_rows_from_labeled_tables(html), hint=95_000)
+
+            fast_score, fast_label, fast_rows = _best_candidate(fast_candidates)
+            if fast_rows:
+                _diag_log(f"fast parser selected={fast_label} rows={len(fast_rows)} score={fast_score}")
+                if _rows_quality(fast_rows) >= 1:
+                    return fast_rows
         except Exception:
             pass
 

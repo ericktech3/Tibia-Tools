@@ -226,3 +226,49 @@ class GuildStatsPreflightSessionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+DUPLICATE_ZERO_TABLE_HTML = """
+<html>
+  <body>
+    <table class="mobile-shadow-copy">
+      <tr><th>Date</th><th>Time on-line</th><th>Lvl</th></tr>
+      <tr><td data-sort="2026-03-17">03-17</td><td>0</td><td>554</td></tr>
+      <tr><td data-sort="2026-03-18">03-18</td><td>0</td><td>554</td></tr>
+      <tr><td data-sort="2026-03-19">03-19</td><td>0</td><td>555 (+1)</td></tr>
+      <tr><td data-sort="2026-03-20">03-20</td><td>0</td><td>555</td></tr>
+      <tr><td data-sort="2026-03-21">03-21</td><td>0</td><td>555</td></tr>
+      <tr><td data-sort="2026-03-22">03-22</td><td>0</td><td>555</td></tr>
+      <tr><td data-sort="2026-03-23">03-23</td><td>0</td><td>556 (+1)</td></tr>
+    </table>
+
+    <table class="exp-history">
+      <tr><th>Date</th><th>Exp change</th><th>Lvl</th></tr>
+      <tr><td data-sort="2026-03-17">03-17</td><td data-sort="19498268">+19,498,268</td><td>554 (+1)</td></tr>
+      <tr><td data-sort="2026-03-18">03-18</td><td data-sort="31">+31</td><td>554</td></tr>
+      <tr><td data-sort="2026-03-19">03-19</td><td data-sort="5231733">+5,231,733</td><td>555 (+1)</td></tr>
+      <tr><td data-sort="2026-03-20">03-20</td><td data-sort="0">0</td><td>555</td></tr>
+      <tr><td data-sort="2026-03-21">03-21</td><td data-sort="0">0</td><td>555</td></tr>
+      <tr><td data-sort="2026-03-22">03-22</td><td data-sort="5197">+5,197</td><td>555</td></tr>
+      <tr><td data-sort="2026-03-23">03-23</td><td data-sort="19129284">+19,129,284</td><td>556 (+1)</td></tr>
+    </table>
+  </body>
+</html>
+"""
+
+
+class GuildStatsDuplicateTableRegressionTests(unittest.TestCase):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value=DUPLICATE_ZERO_TABLE_HTML)
+    def test_prefers_labeled_exp_table_over_duplicate_zero_shadow_table(self, _mock_fetch_html):
+        rows = fetch_guildstats_exp_changes("Elder Aegir", light_only=True)
+        self.assertEqual(
+            rows,
+            [
+                {"date": "2026-03-17", "exp_change": "+19,498,268", "exp_change_int": 19498268},
+                {"date": "2026-03-18", "exp_change": "+31", "exp_change_int": 31},
+                {"date": "2026-03-19", "exp_change": "+5,231,733", "exp_change_int": 5231733},
+                {"date": "2026-03-20", "exp_change": "0", "exp_change_int": 0},
+                {"date": "2026-03-21", "exp_change": "0", "exp_change_int": 0},
+                {"date": "2026-03-22", "exp_change": "+5,197", "exp_change_int": 5197},
+                {"date": "2026-03-23", "exp_change": "+19,129,284", "exp_change_int": 19129284},
+            ],
+        )
