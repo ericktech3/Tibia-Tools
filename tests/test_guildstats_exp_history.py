@@ -272,3 +272,55 @@ class GuildStatsDuplicateTableRegressionTests(unittest.TestCase):
                 {"date": "2026-03-23", "exp_change": "+19,129,284", "exp_change_int": 19129284},
             ],
         )
+
+
+BASE_CHARACTER_HTML_WITH_REAL_EXP_LINK = """
+<html>
+  <body>
+    <ul>
+      <li><a href="/character?nick=Elder+Tree">Character</a></li>
+      <li><a href="/character?nick=Elder+Tree&tab=history">History</a></li>
+      <li><a href="/character?nick=Elder+Tree&tab=experience">Experience</a></li>
+      <li><a href="/character?nick=Elder+Tree&tab=5">Deaths</a></li>
+    </ul>
+  </body>
+</html>
+"""
+
+
+class GuildStatsExperienceLinkSelectionTests(unittest.TestCase):
+    @patch("integrations.tibiadata._new_browser_session")
+    @patch("integrations.tibiadata._session_get_text")
+    def test_prefers_real_experience_href_from_character_menu(self, mock_session_get, mock_new_session):
+        fake_session = object()
+        mock_new_session.return_value = fake_session
+
+        calls = []
+
+        def side_effect(session, url, timeout, headers=None):
+            calls.append(url)
+            self.assertIs(session, fake_session)
+            if "tab=experience" in url:
+                return DIV_BASED_EXP_HTML
+            if "tab=9" in url:
+                return "<html><body><div>Character summary only</div></body></html>"
+            return BASE_CHARACTER_HTML_WITH_REAL_EXP_LINK
+
+        mock_session_get.side_effect = side_effect
+
+        html = _fetch_guildstats_exp_html("Elder Tree", timeout=12)
+        plain = _html_to_plain_text(html)
+
+        self.assertIn("Date Exp change", plain)
+        self.assertTrue(any("tab=experience" in c for c in calls))
+
+    @patch("integrations.tibiadata._new_browser_session")
+    @patch("integrations.tibiadata._session_get_text")
+    def test_rejects_character_page_when_no_candidate_looks_like_exp(self, mock_session_get, mock_new_session):
+        fake_session = object()
+        mock_new_session.return_value = fake_session
+
+        mock_session_get.return_value = "<html><body><div>Character</div><div>Guild</div></body></html>"
+
+        html = _fetch_guildstats_exp_html("Elder Tree", timeout=12)
+        self.assertEqual(html, "")

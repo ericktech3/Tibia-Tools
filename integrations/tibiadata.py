@@ -37,16 +37,17 @@ GUILDSTATS_EXP_URL = "https://guildstats.eu/character?nick={name}&tab=9"
 # Preferimos a página do personagem (não é paginada como a lista do world).
 TIBIA_CHAR_URL = "https://www.tibia.com/community/?subtopic=characters&name={name}"
 
-# Alguns sites (principalmente fansites) podem bloquear user-agent genérico.
-# Usamos um UA de navegador comum para reduzir falsos negativos.
+# Alguns fansites servem um HTML reduzido/alternativo para user-agents mobile.
+# Para o GuildStats, preferimos um UA de navegador desktop para aumentar a chance
+# de receber a página completa da aba Experience (com a tabela real/markup completo).
 UA = {
     "User-Agent": (
-        "Mozilla/5.0 (Linux; Android 13; Mobile) "
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Mobile Safari/537.36"
+        "Chrome/123.0.0.0 Safari/537.36"
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Language": "en-US,en;q=0.9,pt-BR;q=0.8,pt;q=0.7",
 }
 
 
@@ -212,9 +213,9 @@ def _extract_guildstats_tab_url(base_html: str, tab_number: str) -> str:
     if not txt:
         return ""
     pat = re.compile(
-        r'href\s*=\s*["\'](?P<href>[^"\']*character[^"\']*tab='
+        r"href\s*=\s*['\"](?P<href>[^'\"]*character[^'\"]*tab="
         + re.escape(str(tab_number))
-        + r'[^"\']*)["\']',
+        + r"[^'\"]*)['\"]",
         re.I,
     )
     m = pat.search(txt)
@@ -224,6 +225,30 @@ def _extract_guildstats_tab_url(base_html: str, tab_number: str) -> str:
     if not href:
         return ""
     return urljoin("https://guildstats.eu/", href)
+
+
+def _extract_guildstats_exp_link(base_html: str) -> str:
+    txt = base_html or ""
+    if not txt:
+        return ""
+
+    try:
+        soup = BeautifulSoup(txt, "html.parser")
+    except Exception:
+        soup = None
+
+    if soup is not None:
+        exp_labels = {"experience", "experiencia", "experiência", "exp"}
+        for a in soup.find_all("a"):
+            href = str(a.get("href") or "").strip()
+            if not href or "character" not in href.lower():
+                continue
+            label = re.sub(r"\s+", " ", (a.get_text(" ", strip=True) or "")).strip().lower()
+            if label in exp_labels:
+                return urljoin("https://guildstats.eu/", _html.unescape(href))
+
+    # Fallback legado: algumas versões do site ainda apontam explicitamente para tab=9.
+    return _extract_guildstats_tab_url(txt, "9")
 
 
 def _unique_preserve_order(urls: List[str]) -> List[str]:
@@ -299,13 +324,15 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
         break
 
     candidate_urls: List[str] = []
-    extracted = _extract_guildstats_tab_url(base_html, "9")
+    extracted = _extract_guildstats_exp_link(base_html)
     if extracted:
         candidate_urls.append(extracted)
     candidate_urls.extend(tab_urls)
 
     best_html = ""
     best_score = -1
+    best_url = ""
+    best_looks = False
     for url in _unique_preserve_order(candidate_urls):
         txt = _session_get_text(session, url, timeout=timeout, headers=headers)
         if not txt:
@@ -316,31 +343,42 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
             continue
 
         plain = _html_to_plain_text(txt).lower()
+        looks_exp = _looks_like_guildstats_exp_page(txt)
         score = 0
-        if _looks_like_guildstats_exp_page(txt):
+        if looks_exp:
             score += 1000
         score += len(re.findall(r"\b\d{4}-\d{2}-\d{2}\b", plain))
         if "avg exp per hour" in plain:
             score += 50
         if "total in month" in plain:
             score += 50
+        if "best recorded day" in plain:
+            score += 50
+        if "exp change" in plain:
+            score += 100
 
         _diag_log(
-            f"tab ok url={url} len={len(txt)} score={score} looks_exp={_looks_like_guildstats_exp_page(txt)} "
+            f"tab ok url={url} len={len(txt)} score={score} looks_exp={looks_exp} "
             f"snippet={_log_preview(plain)}"
         )
 
         if score > best_score:
             best_html = txt
             best_score = score
-        if score >= 1000:
+            best_url = url
+            best_looks = looks_exp
+        if looks_exp and score >= 1000:
             break
 
+    if best_html and best_looks:
+        _diag_log(f"selected exp html score={best_score} url={best_url}")
+        return best_html
+
     if best_html:
-        _diag_log(f"selected exp html score={best_score}")
+        _diag_log(f"rejecting non-exp html best_score={best_score} url={best_url}")
     else:
         _diag_log("no usable exp html found")
-    return best_html
+    return ""
 
 
 def fetch_worlds_tibiadata(timeout: int = 12) -> Dict[str, Any]:
