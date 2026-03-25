@@ -39,7 +39,7 @@ TIBIA_CHAR_URL = "https://www.tibia.com/community/?subtopic=characters&name={nam
 
 # Alguns fansites servem um HTML reduzido/alternativo para user-agents mobile.
 # Para o GuildStats, preferimos um UA de navegador desktop para aumentar a chance
-# de receber a página completa da aba Experience (com a tabela real/markup completo).
+# de receber a página completa da aba Experience.
 UA = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -213,9 +213,9 @@ def _extract_guildstats_tab_url(base_html: str, tab_number: str) -> str:
     if not txt:
         return ""
     pat = re.compile(
-        r"href\s*=\s*['\"](?P<href>[^'\"]*character[^'\"]*tab="
+        r'href\s*=\s*["\'](?P<href>[^"\']*character[^"\']*tab='
         + re.escape(str(tab_number))
-        + r"[^'\"]*)['\"]",
+        + r'[^"\']*)["\']',
         re.I,
     )
     m = pat.search(txt)
@@ -247,7 +247,6 @@ def _extract_guildstats_exp_link(base_html: str) -> str:
             if label in exp_labels:
                 return urljoin("https://guildstats.eu/", _html.unescape(href))
 
-    # Fallback legado: algumas versões do site ainda apontam explicitamente para tab=9.
     return _extract_guildstats_tab_url(txt, "9")
 
 
@@ -352,10 +351,6 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
             score += 50
         if "total in month" in plain:
             score += 50
-        if "best recorded day" in plain:
-            score += 50
-        if "exp change" in plain:
-            score += 100
 
         _diag_log(
             f"tab ok url={url} len={len(txt)} score={score} looks_exp={looks_exp} "
@@ -370,15 +365,11 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
         if looks_exp and score >= 1000:
             break
 
-    if best_html and best_looks:
-        _diag_log(f"selected exp html score={best_score} url={best_url}")
-        return best_html
-
     if best_html:
-        _diag_log(f"rejecting non-exp html best_score={best_score} url={best_url}")
+        _diag_log(f"selected exp html score={best_score} url={best_url} looks_exp={best_looks}")
     else:
         _diag_log("no usable exp html found")
-    return ""
+    return best_html
 
 
 def fetch_worlds_tibiadata(timeout: int = 12) -> Dict[str, Any]:
