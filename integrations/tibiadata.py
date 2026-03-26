@@ -227,10 +227,12 @@ def _extract_guildstats_tab_url(base_html: str, tab_number: str) -> str:
     return urljoin("https://guildstats.eu/", href)
 
 
-def _extract_guildstats_exp_link(base_html: str) -> str:
+def _extract_guildstats_exp_links(base_html: str) -> List[str]:
     txt = base_html or ""
     if not txt:
-        return ""
+        return []
+
+    out: List[str] = []
 
     try:
         soup = BeautifulSoup(txt, "html.parser")
@@ -238,16 +240,30 @@ def _extract_guildstats_exp_link(base_html: str) -> str:
         soup = None
 
     if soup is not None:
-        exp_labels = {"experience", "experiencia", "experiência", "exp"}
+        exp_tokens = ("experience", "experiencia", "experiência", "exp")
         for a in soup.find_all("a"):
             href = str(a.get("href") or "").strip()
-            if not href or "character" not in href.lower():
+            if not href:
                 continue
+            href_low = href.lower()
             label = re.sub(r"\s+", " ", (a.get_text(" ", strip=True) or "")).strip().lower()
-            if label in exp_labels:
-                return urljoin("https://guildstats.eu/", _html.unescape(href))
+            if not label:
+                continue
+            if not any(tok in label for tok in exp_tokens):
+                continue
+            if "character" not in href_low and "tab=9" not in href_low:
+                continue
+            out.append(urljoin("https://guildstats.eu/", _html.unescape(href)))
 
-    return _extract_guildstats_tab_url(txt, "9")
+    tab_url = _extract_guildstats_tab_url(txt, "9")
+    if tab_url:
+        out.append(tab_url)
+    return _unique_preserve_order(out)
+
+
+def _extract_guildstats_exp_link(base_html: str) -> str:
+    links = _extract_guildstats_exp_links(base_html)
+    return links[0] if links else ""
 
 
 def _unique_preserve_order(urls: List[str]) -> List[str]:
@@ -310,8 +326,12 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
     _diag_log(f"fetch start name={name!r}")
 
     base_html = ""
+    base_url_used = ""
     for url in _unique_preserve_order(base_urls):
-        txt = _session_get_text(session, url, timeout=timeout, headers=headers)
+        req_headers = dict(headers)
+        if base_url_used:
+            req_headers["Referer"] = base_url_used
+        txt = _session_get_text(session, url, timeout=timeout, headers=req_headers)
         if not txt:
             _diag_log(f"base empty url={url}")
             continue
@@ -319,13 +339,20 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
             _diag_log(f"base blocked url={url} snippet={_log_preview(_html_to_plain_text(txt))}")
             continue
         base_html = txt
+        base_url_used = url
         _diag_log(f"base ok url={url} len={len(txt)} snippet={_log_preview(_html_to_plain_text(txt))}")
         break
 
     candidate_urls: List[str] = []
-    extracted = _extract_guildstats_exp_link(base_html)
-    if extracted:
-        candidate_urls.append(extracted)
+    extracted_links = _extract_guildstats_exp_links(base_html)
+    if extracted_links:
+        _diag_log(
+            "exp link candidates="
+            + ", ".join(_log_preview(u, 140) for u in extracted_links[:4])
+        )
+        candidate_urls.extend(extracted_links)
+    else:
+        _diag_log("exp link candidates=none")
     candidate_urls.extend(tab_urls)
 
     best_html = ""
@@ -333,7 +360,10 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
     best_url = ""
     best_looks = False
     for url in _unique_preserve_order(candidate_urls):
-        txt = _session_get_text(session, url, timeout=timeout, headers=headers)
+        req_headers = dict(headers)
+        if base_url_used:
+            req_headers["Referer"] = base_url_used
+        txt = _session_get_text(session, url, timeout=timeout, headers=req_headers)
         if not txt:
             _diag_log(f"tab empty url={url}")
             continue
@@ -367,6 +397,11 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
 
     if best_html:
         _diag_log(f"selected exp html score={best_score} url={best_url} looks_exp={best_looks}")
+        if not best_looks:
+            _diag_log(
+                f"rejecting selected html because looks_exp=False score={best_score} url={best_url}"
+            )
+            return ""
     else:
         _diag_log("no usable exp html found")
     return best_html
@@ -1171,7 +1206,10 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
             if frag:
                 _remember_candidate(fast_candidates, 'best-table-fragment', _parse_rows(frag), hint=3_000)
 
-            _remember_candidate(fast_candidates, 'flat-text', _parse_rows_from_flat_text(html), hint=6_000)
+            if _looks_like_guildstats_exp_page(html):
+                _remember_candidate(fast_candidates, 'flat-text', _parse_rows_from_flat_text(html), hint=6_000)
+            else:
+                _diag_log('skip flat-text parser because html is not confirmed as experience page')
             _remember_candidate(fast_candidates, 'script-json', _parse_rows_from_js(html), hint=500)
             _remember_candidate(fast_candidates, 'labeled-table', _parse_rows_from_labeled_tables(html), hint=95_000)
 
