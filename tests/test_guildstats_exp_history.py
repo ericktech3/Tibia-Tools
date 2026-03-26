@@ -413,3 +413,42 @@ class GuildStatsShortDateDetectionTests(unittest.TestCase):
         self.assertEqual(rows[1]["exp_change_int"], 19129284)
         self.assertRegex(rows[0]["date"], r"^\d{4}-03-22$")
         self.assertRegex(rows[1]["date"], r"^\d{4}-03-23$")
+
+CLIPPED_SECTION_ZERO_HTML = """
+<html>
+  <body>
+    <div>Character History Experience Time online Highscore Deaths</div>
+    <div>03-17 +19,498,268 554 (+1) 1,500,000,000 1h</div>
+    <div>03-18 +31 554 1,500,000,031 0</div>
+    <div>03-19 +5,231,733 555 (+1) 1,505,231,764 2h</div>
+    <div>03-20 0 555 1,505,231,764 0</div>
+    <div>03-21 0 555 1,505,231,764 0</div>
+    <div>03-22 +5,197 555 1,505,236,961 0</div>
+    <div>03-23 +19,129,284 556 (+1) 1,524,366,245 0</div>
+    <div>Average daily exp</div>
+    <div>03-24 0 556 1,524,366,245 0</div>
+    <div>03-25 0 556 1,524,366,245 0</div>
+    <div>Total in month +434,905,872</div>
+  </body>
+</html>
+"""
+
+
+class GuildStatsFlatTextCandidateSelectionTests(unittest.TestCase):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value=CLIPPED_SECTION_ZERO_HTML)
+    def test_prefers_full_flattened_text_when_section_slice_loses_earlier_rows(self, _mock_fetch_html):
+        rows = fetch_guildstats_exp_changes("Monk Curandeiro", light_only=True)
+        self.assertEqual(
+            rows,
+            [
+                {"date": "2026-03-17", "exp_change": "+19,498,268", "exp_change_int": 19498268},
+                {"date": "2026-03-18", "exp_change": "+31", "exp_change_int": 31},
+                {"date": "2026-03-19", "exp_change": "+5,231,733", "exp_change_int": 5231733},
+                {"date": "2026-03-20", "exp_change": "0", "exp_change_int": 0},
+                {"date": "2026-03-21", "exp_change": "0", "exp_change_int": 0},
+                {"date": "2026-03-22", "exp_change": "+5,197", "exp_change_int": 5197},
+                {"date": "2026-03-23", "exp_change": "+19,129,284", "exp_change_int": 19129284},
+                {"date": "2026-03-24", "exp_change": "0", "exp_change_int": 0},
+                {"date": "2026-03-25", "exp_change": "0", "exp_change_int": 0},
+            ],
+        )

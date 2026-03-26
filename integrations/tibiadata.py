@@ -957,120 +957,133 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 return sliced
 
             def _parse_rows_from_flat_text(fragment: str) -> List[Dict[str, Any]]:
-                text_flat = _extract_exp_section_text(fragment)
-                if not text_flat:
-                    text_flat = _flatten_html_text(fragment)
-                if not text_flat:
-                    return []
+                primary_text = _extract_exp_section_text(fragment)
+                full_text = _flatten_html_text(fragment)
 
-                rows: List[Dict[str, Any]] = []
-                seen_dates = set()
-                # O texto linearizado costuma ficar assim:
-                #   Date Exp change ... 2025-09-20 +123,456 638 ... 2025-09-21 0 639 ...
-                # ou, no layout responsivo novo, em cards/listas com labels antes do valor.
-                date_block_re = re.compile(
-                    r"(?P<date>\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4}|\d{2}-\d{2})\b)(?P<body>.*?)(?=(?:\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4}|\d{2}-\d{2})\b)|$)",
-                    re.S,
-                )
-                token_re = re.compile(r"(?<!\d)([+-]\s*\d[\d,.]*|\b0\b|\d[\d,.]*)(?!\d)")
-
-                for mblk in date_block_re.finditer(text_flat):
-                    date_iso = _extract_date_iso(mblk.group('date') or '')
-                    if not date_iso or date_iso in seen_dates:
-                        continue
-
-                    body = str(mblk.group('body') or '')
-                    if not body.strip():
-                        continue
-
-                    body_norm = re.sub(r"\s+", " ", body).strip()
-                    body_norm = re.sub(r"\(\s*[+-]\s*\d[\d,.]*\s*\)", " ", body_norm)
-                    body_norm = re.sub(r"(?i)\bview on tibia\.com\b", " ", body_norm)
-                    body_norm = re.sub(
-                        r"(?i)\b(?:vocation rank|rank da vocação|rank da vocacao|lvl|level|experience|time on-?line|avg exp per hour|average daily exp|média diária de exp|media diaria de exp)\b",
-                        " ",
-                        body_norm,
+                def _parse_rows_from_flat_text_source(text_flat: str) -> List[Dict[str, Any]]:
+                    rows: List[Dict[str, Any]] = []
+                    seen_dates = set()
+                    date_block_re = re.compile(
+                        r"(?P<date>\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4}|\d{2}-\d{2})\b)(?P<body>.*?)(?=(?:\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4}|\d{2}-\d{2})\b)|$)",
+                        re.S,
                     )
-                    body_norm = re.sub(r"\s+", " ", body_norm).strip()
+                    token_re = re.compile(r"(?<!\d)([+-]\s*\d[\d,.]*|\b0\b|\d[\d,.]*)(?!\d)")
 
-                    exp_txt = ""
-                    fallback_zero = ""
-                    fallback_unsigned = ""
-                    fallback_signed_small = ""
-                    leading_candidate = ""
-                    leading_unsigned = ""
+                    for mblk in date_block_re.finditer(text_flat):
+                        date_iso = _extract_date_iso(mblk.group('date') or '')
+                        if not date_iso or date_iso in seen_dates:
+                            continue
 
-                    labeled_match = re.search(
-                        r"(?i)\b(?:exp\s*change|change|mudan[çc]a\s+de\s+exp)\b[^0-9+-]{0,20}(?P<value>[+-]?\s*\d[\d,.]*)",
-                        body,
-                    )
-                    if labeled_match:
-                        labeled_raw = str(labeled_match.group('value') or '').strip()
-                        labeled_int = _parse_exp_to_int_fast(labeled_raw)
-                        if labeled_int is not None:
-                            exp_txt = labeled_raw.replace(" ", "")
+                        body = str(mblk.group('body') or '')
+                        if not body.strip():
+                            continue
 
-                    first_token = token_re.search(body_norm)
-                    if first_token:
-                        raw0 = str(first_token.group(1) or '').strip()
-                        exp0 = _parse_exp_to_int_fast(raw0)
-                        if exp0 is not None:
-                            raw0_clean = raw0.replace(" ", "")
-                            if raw0.lstrip().startswith(("+", "-")) or int(exp0) == 0:
-                                leading_candidate = raw0_clean
-                            elif 0 < abs(int(exp0)) <= 500_000_000:
-                                # Em alguns layouts novos, o sinal do delta some no texto linearizado.
-                                # Nesses casos, o primeiro número logo após a data costuma ser o Exp change.
-                                leading_unsigned = raw0_clean
+                        # Ignora linhas que claramente pertencem a outros blocos
+                        # (former worlds / best day / transicao de header), comuns na pagina base.
+                        if re.search(r"(?i)\bdate\s+exp\s+change\b", body) or re.search(r"(?i)\blevel prediction\b", body):
+                            continue
 
-                    for mnum in token_re.finditer(body_norm):
-                        raw = str(mnum.group(1) or "").strip()
-                        exp_int = _parse_exp_to_int_fast(raw)
+                        body = re.split(
+                            r"(?i)\b(?:total in month|total no m[eê]s|total no mes|guildstats\.eu|partners compare characters)\b",
+                            body,
+                            maxsplit=1,
+                        )[0]
+                        if not body.strip():
+                            continue
+
+                        body_norm = re.sub(r"\s+", " ", body).strip()
+                        body_norm = re.sub(r"\(\s*[+-]\s*\d[\d,.]*\s*\)", " ", body_norm)
+                        body_norm = re.sub(r"(?i)\bview on tibia\.com\b", " ", body_norm)
+                        body_norm = re.sub(
+                            r"(?i)\b(?:vocation rank|rank da vocação|rank da vocacao|lvl|level|experience|time on-?line|avg exp per hour|average daily exp|média diária de exp|media diaria de exp)\b",
+                            " ",
+                            body_norm,
+                        )
+                        body_norm = re.sub(r"\s+", " ", body_norm).strip()
+
+                        exp_txt = ""
+                        fallback_zero = ""
+                        fallback_unsigned = ""
+                        fallback_signed_small = ""
+                        leading_candidate = ""
+                        leading_unsigned = ""
+
+                        labeled_match = re.search(
+                            r"(?i)\b(?:exp\s*change|change|mudan[çc]a\s+de\s+exp)\b[^0-9+-]{0,20}(?P<value>[+-]?\s*\d[\d,.]*)",
+                            body,
+                        )
+                        if labeled_match:
+                            labeled_raw = str(labeled_match.group('value') or '').strip()
+                            labeled_int = _parse_exp_to_int_fast(labeled_raw)
+                            if labeled_int is not None:
+                                exp_txt = labeled_raw.replace(" ", "")
+
+                        first_token = token_re.search(body_norm)
+                        if first_token:
+                            raw0 = str(first_token.group(1) or '').strip()
+                            exp0 = _parse_exp_to_int_fast(raw0)
+                            if exp0 is not None:
+                                raw0_clean = raw0.replace(" ", "")
+                                if raw0.lstrip().startswith(("+", "-")) or int(exp0) == 0:
+                                    leading_candidate = raw0_clean
+                                elif 0 < abs(int(exp0)) <= 500_000_000:
+                                    leading_unsigned = raw0_clean
+
+                        for mnum in token_re.finditer(body_norm):
+                            raw = str(mnum.group(1) or '').strip()
+                            exp_int = _parse_exp_to_int_fast(raw)
+                            if exp_int is None:
+                                continue
+                            abs_int = abs(int(exp_int))
+
+                            if raw.lstrip().startswith(("+", "-")) and abs_int >= 10_000:
+                                exp_txt = raw.replace(" ", "")
+                                break
+
+                            if raw.lstrip().startswith(("+", "-")) and abs_int < 10_000 and not fallback_signed_small:
+                                fallback_signed_small = raw.replace(" ", "")
+                                continue
+
+                            if int(exp_int) == 0 and not fallback_zero:
+                                fallback_zero = "0"
+                                continue
+
+                            if not raw.lstrip().startswith(("+", "-")) and 10_000 <= abs_int <= 500_000_000 and not fallback_unsigned:
+                                fallback_unsigned = raw.replace(" ", "")
+
+                        if not exp_txt:
+                            exp_txt = leading_candidate or leading_unsigned or fallback_signed_small or fallback_unsigned or fallback_zero
+                        if not exp_txt:
+                            continue
+
+                        exp_int = _parse_exp_to_int_fast(exp_txt)
                         if exp_int is None:
                             continue
-                        abs_int = abs(int(exp_int))
-
-                        if raw.lstrip().startswith(("+", "-")) and abs_int >= 10_000:
-                            exp_txt = raw.replace(" ", "")
-                            break
-
-                        if raw.lstrip().startswith(("+", "-")) and abs_int < 10_000 and not fallback_signed_small:
-                            fallback_signed_small = raw.replace(" ", "")
+                        if abs(int(exp_int)) not in (0,) and abs(int(exp_int)) < 10_000 and exp_txt not in (leading_candidate, leading_unsigned, fallback_signed_small):
                             continue
 
-                        if int(exp_int) == 0 and not fallback_zero:
-                            fallback_zero = "0"
-                            continue
+                        exp_txt_out = exp_txt
+                        if not str(exp_txt_out).lstrip().startswith(("+", "-")) and int(exp_int) > 0:
+                            exp_txt_out = _format_exp_text(int(exp_int))
 
-                        # Fallback para layouts novos que omitem o sinal do delta.
-                        # Mantemos um teto para não confundir com a coluna de EXP total.
-                        if not raw.lstrip().startswith(("+", "-")) and 10_000 <= abs_int <= 500_000_000 and not fallback_unsigned:
-                            fallback_unsigned = raw.replace(" ", "")
+                        seen_dates.add(date_iso)
+                        rows.append({
+                            'date': date_iso,
+                            'exp_change': exp_txt_out,
+                            'exp_change_int': int(exp_int),
+                        })
 
-                    if not exp_txt:
-                        exp_txt = leading_candidate or leading_unsigned or fallback_signed_small or fallback_unsigned or fallback_zero
-                    if not exp_txt:
-                        continue
+                    return rows
 
-                    exp_int = _parse_exp_to_int_fast(exp_txt)
-                    if exp_int is None:
-                        continue
-                    if abs(int(exp_int)) not in (0,) and abs(int(exp_int)) < 10_000 and exp_txt not in (leading_candidate, leading_unsigned, fallback_signed_small):
-                        continue
-
-                    exp_txt_out = exp_txt
-                    if not str(exp_txt_out).lstrip().startswith(("+", "-")) and int(exp_int) > 0:
-                        exp_txt_out = _format_exp_text(int(exp_int))
-
-                    seen_dates.add(date_iso)
-                    rows.append({
-                        'date': date_iso,
-                        'exp_change': exp_txt_out,
-                        'exp_change_int': int(exp_int),
-                    })
-
-                return rows
-
+                primary_rows = _parse_rows_from_flat_text_source(primary_text) if primary_text else []
+                primary_nonzero = sum(1 for row in primary_rows if int(row.get('exp_change_int') or 0) != 0)
+                if full_text and full_text != primary_text and (not primary_rows or primary_nonzero == 0):
+                    full_rows = _parse_rows_from_flat_text_source(full_text)
+                    full_nonzero = sum(1 for row in full_rows if int(row.get('exp_change_int') or 0) != 0)
+                    if len(full_rows) > len(primary_rows) or full_nonzero > primary_nonzero:
+                        return full_rows
+                return primary_rows
+                return best_rows
             def _format_exp_text(value: int) -> str:
                 if int(value) == 0:
                     return "0"
