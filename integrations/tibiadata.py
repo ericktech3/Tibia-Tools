@@ -396,9 +396,15 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
 
     if base_html and _has_guildstats_exp_structure(base_html):
         _diag_log("base page already contains exp-like structure; keeping it as fallback candidate")
-        candidate_urls.append("__base_html__")
 
     candidate_urls.extend(tab_urls)
+
+    if base_html and _has_guildstats_exp_structure(base_html):
+        # A pagina base do personagem pode conter um teaser/resumo da Experience,
+        # mas nao necessariamente a tabela completa do historico. Tentamos as URLs
+        # explicitas da aba antes de cair nesse HTML base, para evitar parar cedo
+        # num fallback parcial que costuma gerar poucos registros ou zeros.
+        candidate_urls.append("__base_html__")
 
     best_html = ""
     best_score = -1
@@ -440,7 +446,7 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
             best_score = score
             best_url = url
             best_looks = looks_exp
-        if looks_exp and score >= 1000:
+        if url != "__base_html__" and looks_exp and score >= 1000:
             break
 
     if best_html:

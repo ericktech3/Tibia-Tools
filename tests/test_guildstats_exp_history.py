@@ -452,3 +452,59 @@ class GuildStatsFlatTextCandidateSelectionTests(unittest.TestCase):
                 {"date": "2026-03-25", "exp_change": "0", "exp_change_int": 0},
             ],
         )
+
+
+BASE_PAGE_TEASER_EXP_HTML = """
+<html>
+  <body>
+    <div>Character History Experience Time online Highscore Deaths</div>
+    <div>Date Exp change Vocation rank Lvl Experience Time on-line Avg exp per hour</div>
+    <div>03-21 0 555 555 1,505,231,764 0</div>
+    <div>03-22 +5,197 555 555 1,505,236,961 0</div>
+    <div>03-23 +19,129,284 556 (+1) 556 1,524,366,245 0</div>
+  </body>
+</html>
+"""
+
+FULL_EXP_TAB_HTML = """
+<html>
+  <body>
+    <table class="exp-history">
+      <tr><th>Date</th><th>Exp change</th><th>Vocation rank</th><th>Lvl</th><th>Experience</th></tr>
+      <tr><td data-sort="2026-03-17">03-17</td><td data-sort="19498268">+19,498,268</td><td>554 (+1)</td><td>554</td><td>1,500,000,000</td></tr>
+      <tr><td data-sort="2026-03-18">03-18</td><td data-sort="31">+31</td><td>554</td><td>554</td><td>1,500,000,031</td></tr>
+      <tr><td data-sort="2026-03-19">03-19</td><td data-sort="5231733">+5,231,733</td><td>555 (+1)</td><td>555</td><td>1,505,231,764</td></tr>
+      <tr><td data-sort="2026-03-20">03-20</td><td data-sort="0">0</td><td>555</td><td>555</td><td>1,505,231,764</td></tr>
+      <tr><td data-sort="2026-03-21">03-21</td><td data-sort="0">0</td><td>555</td><td>555</td><td>1,505,231,764</td></tr>
+      <tr><td data-sort="2026-03-22">03-22</td><td data-sort="5197">+5,197</td><td>555</td><td>555</td><td>1,505,236,961</td></tr>
+      <tr><td data-sort="2026-03-23">03-23</td><td data-sort="19129284">+19,129,284</td><td>556 (+1)</td><td>556</td><td>1,524,366,245</td></tr>
+    </table>
+  </body>
+</html>
+"""
+
+
+class GuildStatsBaseTeaserFallbackOrderingTests(unittest.TestCase):
+    @patch("integrations.tibiadata._new_browser_session")
+    @patch("integrations.tibiadata._session_get_text")
+    def test_fetch_exp_html_tries_tab_urls_before_base_html_teaser(self, mock_session_get, mock_new_session):
+        fake_session = object()
+        mock_new_session.return_value = fake_session
+
+        calls = []
+
+        def side_effect(session, url, timeout, headers=None):
+            self.assertIs(session, fake_session)
+            calls.append(url)
+            if "tab=9" in url:
+                return FULL_EXP_TAB_HTML
+            return BASE_PAGE_TEASER_EXP_HTML
+
+        mock_session_get.side_effect = side_effect
+
+        html = _fetch_guildstats_exp_html("Monk Curandeiro", timeout=12)
+        plain = _html_to_plain_text(html)
+
+        self.assertTrue(any("tab=9" in url for url in calls))
+        self.assertIn("03-17", plain)
+        self.assertIn("+19,498,268", plain)
