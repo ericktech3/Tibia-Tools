@@ -306,3 +306,53 @@ class GuildStatsSignlessFlatTextRegressionTests(unittest.TestCase):
                 {"date": "2026-03-23", "exp_change": "+19,129,284", "exp_change_int": 19129284},
             ],
         )
+
+
+WRONG_TAB_HTML = """
+<html>
+  <body>
+    <div>Menu</div>
+    <div>Character History Experience Time online Highscore Deaths</div>
+    <div>Elder Aegir - Elder Druid (Serdebra)</div>
+    <div>Former worlds: 2025-02-03 Antica</div>
+    <div>GuildStats.eu</div>
+  </body>
+</html>
+"""
+
+
+class GuildStatsRejectWrongTabTests(unittest.TestCase):
+    @patch("integrations.tibiadata._new_browser_session")
+    @patch("integrations.tibiadata._session_get_text")
+    def test_fetch_exp_html_rejects_non_experience_html_even_when_tab_request_returns_200(self, mock_session_get, mock_new_session):
+        fake_session = object()
+        mock_new_session.return_value = fake_session
+
+        def side_effect(session, url, timeout, headers=None):
+            self.assertIs(session, fake_session)
+            if "tab=9" in url:
+                return WRONG_TAB_HTML
+            return BASE_CHARACTER_HTML
+
+        mock_session_get.side_effect = side_effect
+
+        html = _fetch_guildstats_exp_html("Elder Aegir", timeout=12)
+        self.assertEqual(html, "")
+
+
+FALSE_POSITIVE_ZERO_HTML = """
+<html>
+  <body>
+    <div>Elder Aegir - Elder Druid (Serdebra)</div>
+    <div>History 2026-03-17 0 2026-03-18 0 2026-03-19 0</div>
+    <div>Deaths 2026-03-20 0</div>
+  </body>
+</html>
+"""
+
+
+class GuildStatsFalsePositiveGuardTests(unittest.TestCase):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value=FALSE_POSITIVE_ZERO_HTML)
+    def test_does_not_fabricate_zero_rows_from_non_experience_flat_text(self, _mock_fetch_html):
+        rows = fetch_guildstats_exp_changes("Elder Aegir", light_only=True)
+        self.assertEqual(rows, [])
