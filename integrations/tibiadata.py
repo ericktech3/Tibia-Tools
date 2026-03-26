@@ -13,6 +13,7 @@ Também expomos:
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+from datetime import date as _date
 import re
 import time
 import html as _html
@@ -170,40 +171,79 @@ def _html_to_plain_text(html_text: str) -> str:
     return txt
 
 
+def _has_guildstats_exp_structure(html_text: str) -> bool:
+    plain = _html_to_plain_text(html_text).lower()
+    if not plain:
+        return False
+
+    date_hits = len(re.findall(r"\b\d{4}-\d{2}-\d{2}\b", plain))
+    short_date_hits = len(re.findall(r"\b\d{2}-\d{2}\b", plain))
+
+    direct_markers = (
+        "date exp change",
+        "date change",
+        "data mudança de exp",
+        "data mudanca de exp",
+        "mudanca de exp",
+        "mudança de exp",
+    )
+    if any(marker in plain for marker in direct_markers):
+        return True
+
+    context_markers = (
+        "avg exp per hour",
+        "average daily exp",
+        "best recorded day",
+        "time on-line",
+        "time online",
+        "vocation rank",
+        "rank da vocação",
+        "rank da vocacao",
+        "total in month",
+        "total no mês",
+        "total no mes",
+    )
+    if (date_hits >= 2 or short_date_hits >= 2) and any(marker in plain for marker in context_markers):
+        return True
+
+    try:
+        soup = BeautifulSoup(html_text or "", "html.parser")
+    except Exception:
+        soup = None
+
+    if soup is not None:
+        for table in soup.find_all("table"):
+            headers = [re.sub(r"\s+", " ", (th.get_text(" ", strip=True) or "")).strip().lower() for th in table.find_all("th")]
+            if not headers:
+                continue
+            joined = " | ".join(headers)
+            has_date = any(h == "date" or h == "data" or "date" in h or "data" in h for h in headers)
+            has_change = any(("exp" in h and "change" in h) or h == "change" or "mudanca" in h or "mudança" in h for h in headers)
+            if has_date and has_change:
+                return True
+            if has_date and ("avg exp per hour" in joined or "time on-line" in joined or "vocation rank" in joined):
+                return True
+
+    return False
+
+
 def _looks_like_guildstats_exp_page(html_text: str) -> bool:
     plain = _html_to_plain_text(html_text).lower()
     if not plain:
         return False
 
-    direct_markers = (
-        "date exp change",
-        "data mudança de exp",
-        "data mudanca de exp",
-    )
-    if any(marker in plain for marker in direct_markers):
-        return True
-
-    if (
-        ("total in month" in plain or "total no mês" in plain or "total no mes" in plain)
-        and (
-            "avg exp per hour" in plain
-            or "exp média por hora" in plain
-            or "exp media por hora" in plain
-            or "vocation rank" in plain
-            or "rank da vocação" in plain
-            or "rank da vocacao" in plain
-        )
-    ):
-        return True
-
-    if "best recorded day" in plain and "average daily exp" in plain:
+    if _has_guildstats_exp_structure(html_text):
         return True
 
     if re.search(r"\bdate\b.*\bexp\s+change\b.*\bexperience\b", plain):
         return True
+    if re.search(r"\bdate\b.*\bchange\b.*\btime\s*on-?line\b", plain):
+        return True
     if re.search(r"\bdata\b.*\bexp\b.*\bexperi", plain):
         return True
     if re.search(r"\b\d{4}-\d{2}-\d{2}\b", plain) and ("vocation rank" in plain or "time on-line" in plain):
+        return True
+    if re.search(r"\b\d{2}-\d{2}\b", plain) and ("avg exp per hour" in plain or "time on-line" in plain or "vocation rank" in plain):
         return True
     return False
 
@@ -353,6 +393,11 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
         candidate_urls.extend(extracted_links)
     else:
         _diag_log("exp link candidates=none")
+
+    if base_html and _has_guildstats_exp_structure(base_html):
+        _diag_log("base page already contains exp-like structure; keeping it as fallback candidate")
+        candidate_urls.append("__base_html__")
+
     candidate_urls.extend(tab_urls)
 
     best_html = ""
@@ -363,7 +408,10 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
         req_headers = dict(headers)
         if base_url_used:
             req_headers["Referer"] = base_url_used
-        txt = _session_get_text(session, url, timeout=timeout, headers=req_headers)
+        if url == "__base_html__":
+            txt = base_html
+        else:
+            txt = _session_get_text(session, url, timeout=timeout, headers=req_headers)
         if not txt:
             _diag_log(f"tab empty url={url}")
             continue
@@ -396,10 +444,13 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
             break
 
     if best_html:
-        _diag_log(f"selected exp html score={best_score} url={best_url} looks_exp={best_looks}")
-        if not best_looks:
+        structural = _has_guildstats_exp_structure(best_html)
+        _diag_log(
+            f"selected exp html score={best_score} url={best_url} looks_exp={best_looks} structural={structural}"
+        )
+        if not best_looks and not structural:
             _diag_log(
-                f"rejecting selected html because looks_exp=False score={best_score} url={best_url}"
+                f"rejecting selected html because looks_exp=False and structural=False score={best_score} url={best_url}"
             )
             return ""
     else:
@@ -726,9 +777,25 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 num = int("".join(digits))
                 return -num if sign_ch == "-" else num
 
-            # Datas: ISO (YYYY-MM-DD) e DMY (DD.MM.YYYY / DD/MM/YYYY / DD-MM-YYYY)
+            # Datas: ISO (YYYY-MM-DD), DMY (DD.MM.YYYY / DD/MM/YYYY / DD-MM-YYYY)
+            # e o layout novo do GuildStats com MM-DD visivel na tabela.
             iso_re = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
             dmy_re = re.compile(r"\b(\d{2})[./-](\d{2})[./-](\d{4})\b")
+            md_re = re.compile(r"\b(\d{2})-(\d{2})\b")
+
+            def _infer_year_for_month_day(month: int, day: int) -> int:
+                today = _date.today()
+                year = today.year
+                try:
+                    candidate = _date(year, month, day)
+                except Exception:
+                    return year
+                delta_days = (candidate - today).days
+                if delta_days > 45:
+                    return year - 1
+                if delta_days < -320:
+                    return year + 1
+                return year
 
             def _extract_date_iso(s: str) -> Optional[str]:
                 txt = (s or "").strip()
@@ -739,6 +806,11 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 if m:
                     dd, mm, yyyy = m.group(1), m.group(2), m.group(3)
                     return f"{yyyy}-{mm}-{dd}"
+                m = md_re.search(txt)
+                if m:
+                    mm, dd = int(m.group(1)), int(m.group(2))
+                    yyyy = _infer_year_for_month_day(mm, dd)
+                    return f"{yyyy:04d}-{mm:02d}-{dd:02d}"
                 return None
 
             def _strip_tags(s: str) -> str:
@@ -897,7 +969,7 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 #   Date Exp change ... 2025-09-20 +123,456 638 ... 2025-09-21 0 639 ...
                 # ou, no layout responsivo novo, em cards/listas com labels antes do valor.
                 date_block_re = re.compile(
-                    r"(?P<date>\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4})\b)(?P<body>.*?)(?=(?:\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4})\b)|$)",
+                    r"(?P<date>\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4}|\d{2}-\d{2})\b)(?P<body>.*?)(?=(?:\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4}|\d{2}-\d{2})\b)|$)",
                     re.S,
                 )
                 token_re = re.compile(r"(?<!\d)([+-]\s*\d[\d,.]*|\b0\b|\d[\d,.]*)(?!\d)")
