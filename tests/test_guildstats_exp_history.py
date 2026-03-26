@@ -356,3 +356,60 @@ class GuildStatsFalsePositiveGuardTests(unittest.TestCase):
     def test_does_not_fabricate_zero_rows_from_non_experience_flat_text(self, _mock_fetch_html):
         rows = fetch_guildstats_exp_changes("Elder Aegir", light_only=True)
         self.assertEqual(rows, [])
+
+BASE_PAGE_WITH_EMBEDDED_EXP_TABLE_HTML = """
+<html>
+  <body>
+    <div>Character History Experience Time online Highscore Deaths</div>
+    <table class="exp-history responsive">
+      <tr><th>Date</th><th>Change</th><th>Lvl</th><th>Time on-line</th></tr>
+      <tr><td data-sort="2026-03-22">03-22</td><td data-sort="5197">+5,197</td><td>555</td><td>0</td></tr>
+      <tr><td data-sort="2026-03-23">03-23</td><td data-sort="19129284">+19,129,284</td><td>556 (+1)</td><td>3h</td></tr>
+    </table>
+  </body>
+</html>
+"""
+
+
+class GuildStatsEmbeddedBasePageFallbackTests(unittest.TestCase):
+    @patch("integrations.tibiadata._new_browser_session")
+    @patch("integrations.tibiadata._session_get_text")
+    def test_fetch_exp_html_can_fall_back_to_base_page_when_it_already_contains_exp_table(self, mock_session_get, mock_new_session):
+        fake_session = object()
+        mock_new_session.return_value = fake_session
+
+        def side_effect(session, url, timeout, headers=None):
+            self.assertIs(session, fake_session)
+            if "tab=9" in url:
+                return WRONG_TAB_HTML
+            return BASE_PAGE_WITH_EMBEDDED_EXP_TABLE_HTML
+
+        mock_session_get.side_effect = side_effect
+
+        html = _fetch_guildstats_exp_html("Elder Aegir", timeout=12)
+        plain = _html_to_plain_text(html)
+        self.assertIn("03-23", plain)
+        self.assertIn("+19,129,284", plain)
+
+
+SHORT_DATE_ONLY_EXP_HTML = """
+<html>
+  <body>
+    <div>Date Change Time on-line Avg exp per hour</div>
+    <div>03-22 +5,197 0 0</div>
+    <div>03-23 +19,129,284 3h 6,376,428/h</div>
+    <div>Total in month +434,905,872</div>
+  </body>
+</html>
+"""
+
+
+class GuildStatsShortDateDetectionTests(unittest.TestCase):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value=SHORT_DATE_ONLY_EXP_HTML)
+    def test_accepts_short_mm_dd_layout_when_exp_context_is_present(self, _mock_fetch_html):
+        rows = fetch_guildstats_exp_changes("Elder Aegir", light_only=True)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["exp_change_int"], 5197)
+        self.assertEqual(rows[1]["exp_change_int"], 19129284)
+        self.assertRegex(rows[0]["date"], r"^\d{4}-03-22$")
+        self.assertRegex(rows[1]["date"], r"^\d{4}-03-23$")
