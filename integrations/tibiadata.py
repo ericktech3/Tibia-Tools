@@ -1290,6 +1290,185 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
 
                 return best_rows
 
+            def _parse_rows_from_structured_blocks(fragment: str) -> List[Dict[str, Any]]:
+                try:
+                    soup_local = BeautifulSoup(fragment or "", "html.parser")
+                except Exception:
+                    return []
+
+                def _iter_attr_values(node: Any) -> List[str]:
+                    values: List[str] = []
+                    try:
+                        descendants = [node, *list(node.descendants)]
+                    except Exception:
+                        descendants = [node]
+                    for item in descendants:
+                        if not hasattr(item, "attrs"):
+                            continue
+                        for attr in ("data-sort", "data-order", "data-value", "sorttable_customkey", "title", "aria-label"):
+                            try:
+                                raw = item.get(attr)
+                            except Exception:
+                                raw = None
+                            if raw is None:
+                                continue
+                            txt = re.sub(r"\s+", " ", str(raw)).strip()
+                            if txt:
+                                values.append(txt)
+                    return values
+
+                def _pick_exp_from_payload(text_payload: str, attr_values: List[str]) -> Optional[tuple[str, int]]:
+                    payload = re.sub(r"\s+", " ", str(text_payload or "")).strip()
+                    if not payload and not attr_values:
+                        return None
+
+                    payload = re.sub(r"\(\s*[+-]\s*\d[\d,.]*\s*\)", " ", payload)
+                    payload = re.sub(r"(?i)\bview on tibia\.com\b", " ", payload)
+                    payload = re.sub(r"\s+", " ", payload).strip()
+                    low_payload = payload.lower()
+                    attr_blob = " ".join(str(v or "") for v in attr_values).lower()
+                    has_change_context = any(marker in low_payload for marker in (
+                        "exp change", "change", "gain", "avg exp", "average daily exp", "time on-line", "time online",
+                    )) or any(marker in attr_blob for marker in ("exp change", "change", "gain"))
+                    if ("best recorded day" in low_payload or "average daily exp" in low_payload) and not has_change_context:
+                        return None
+                    if not has_change_context:
+                        return None
+
+                    labeled = re.search(
+                        r"(?i)\b(?:exp\s*change|change|gain|mudan[çc]a\s+de\s+exp)\b[^0-9+-]{0,24}(?P<value>[+-]?\s*\d[\d,.]*)",
+                        payload,
+                    )
+                    if labeled:
+                        raw = str(labeled.group("value") or "").strip().replace(" ", "")
+                        parsed = _parse_exp_to_int_fast(raw)
+                        if parsed is not None and 0 <= abs(int(parsed)) <= 300_000_000 and (raw.lstrip().startswith(("+", "-")) or abs(int(parsed)) >= 100 or int(parsed) == 0):
+                            out = raw
+                            if not raw.lstrip().startswith(("+", "-")) and int(parsed) > 0:
+                                out = _format_exp_text(int(parsed))
+                            return (out, int(parsed))
+
+                    signed_candidates: List[tuple[int, str, int]] = []
+                    unsigned_candidates: List[tuple[int, str, int]] = []
+                    token_re_local = re.compile(r"(?<!\d)([+-]\s*\d[\d,.]*|\b0\b|\d[\d,.]*)(?!\d)")
+                    for match in token_re_local.finditer(payload):
+                        raw = str(match.group(1) or "").strip().replace(" ", "")
+                        parsed = _parse_exp_to_int_fast(raw)
+                        if parsed is None:
+                            continue
+                        val = int(parsed)
+                        abs_val = abs(val)
+                        if abs_val > 300_000_000:
+                            continue
+                        if raw.lstrip().startswith(("+", "-")):
+                            signed_candidates.append((abs_val, raw, val))
+                        else:
+                            if abs_val not in (0,) and abs_val < 10_000:
+                                continue
+                            unsigned_candidates.append((abs_val, raw, val))
+
+                    if signed_candidates:
+                        _abs, raw, val = max(signed_candidates, key=lambda item: item[0])
+                        return (raw, int(val))
+
+                    if has_change_context:
+                        numeric_attrs: List[int] = []
+                        for raw_attr in attr_values:
+                            parsed = _parse_exp_to_int_fast(raw_attr)
+                            if parsed is None:
+                                continue
+                            val = int(parsed)
+                            abs_val = abs(val)
+                            if abs_val == 0:
+                                continue
+                            if abs_val < 10_000 or abs_val > 300_000_000:
+                                continue
+                            numeric_attrs.append(val)
+                        if numeric_attrs:
+                            best_val = max(numeric_attrs, key=lambda v: abs(int(v)))
+                            return (_format_exp_text(int(best_val)), int(best_val))
+
+                    if unsigned_candidates and has_change_context:
+                        _abs, raw, val = max(unsigned_candidates, key=lambda item: item[0])
+                        out_txt = raw
+                        if int(val) > 0 and not raw.lstrip().startswith(("+", "-")):
+                            out_txt = _format_exp_text(int(val))
+                        return (out_txt, int(val))
+
+                    if re.search(r"(?<!\d)0(?!\d)", payload):
+                        return ("0", 0)
+                    return None
+
+                seen_dates = set()
+                rows: List[Dict[str, Any]] = []
+                preferred_tags = {"tr": 40, "li": 32, "article": 28, "section": 26, "div": 24}
+
+                for text_node in soup_local.find_all(string=True):
+                    raw_text = re.sub(r"\s+", " ", str(text_node or "")).strip()
+                    if not raw_text:
+                        continue
+                    date_iso = _extract_date_iso(raw_text)
+                    if not date_iso or date_iso in seen_dates:
+                        continue
+
+                    try:
+                        parent = text_node.parent
+                    except Exception:
+                        parent = None
+                    ancestors = []
+                    hops = 0
+                    while parent is not None and hops < 6:
+                        tag_name = getattr(parent, "name", "") or ""
+                        if tag_name in preferred_tags:
+                            ancestors.append(parent)
+                        parent = getattr(parent, "parent", None)
+                        hops += 1
+
+                    best_pick: Optional[tuple[int, str, int]] = None
+                    for container in ancestors:
+                        tag_name = getattr(container, "name", "") or "div"
+                        payload_text = re.sub(r"\s+", " ", container.get_text(" ", strip=True) or "").strip()
+                        if not payload_text:
+                            continue
+                        low_payload = payload_text.lower()
+                        if any(marker in low_payload for marker in ("total in month", "total no mes", "total no mês", "guildstats.eu")):
+                            continue
+                        header_pos = low_payload.find("date exp change")
+                        date_pos = low_payload.find(str(raw_text or "").lower())
+                        if header_pos != -1 and date_pos != -1 and date_pos < header_pos:
+                            continue
+                        date_hits = len(re.findall(r"\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4}|\d{2}-\d{2})\b", payload_text))
+                        if date_hits < 1 or date_hits > 3:
+                            continue
+                        if len(payload_text) > 900:
+                            continue
+
+                        attr_values = _iter_attr_values(container)
+                        picked = _pick_exp_from_payload(payload_text, attr_values)
+                        if not picked:
+                            continue
+                        out_txt, out_int = picked
+                        score = preferred_tags.get(tag_name, 10)
+                        score += max(0, 350 - min(len(payload_text), 350)) // 20
+                        if any(label in low_payload for label in ("exp change", "change", "gain", "avg exp")):
+                            score += 10
+                        if int(out_int) != 0:
+                            score += 20
+                        if best_pick is None or score > best_pick[0]:
+                            best_pick = (score, out_txt, int(out_int))
+
+                    if best_pick is None:
+                        continue
+                    _score, out_txt, out_int = best_pick
+                    seen_dates.add(date_iso)
+                    rows.append({
+                        'date': date_iso,
+                        'exp_change': out_txt,
+                        'exp_change_int': int(out_int),
+                    })
+
+                return rows
+
             fast_candidates: List[Any] = []
             _remember_candidate(fast_candidates, 'generic-tr', _parse_rows(html), hint=1_000)
 
@@ -1298,6 +1477,7 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 _remember_candidate(fast_candidates, 'best-table-fragment', _parse_rows(frag), hint=3_000)
 
             if _looks_like_guildstats_exp_page(html):
+                _remember_candidate(fast_candidates, 'structured-blocks', _parse_rows_from_structured_blocks(html), hint=120_000)
                 _remember_candidate(fast_candidates, 'flat-text', _parse_rows_from_flat_text(html), hint=6_000)
             else:
                 _diag_log('skip flat-text parser because html is not confirmed as experience page')

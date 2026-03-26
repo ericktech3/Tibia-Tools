@@ -508,3 +508,38 @@ class GuildStatsBaseTeaserFallbackOrderingTests(unittest.TestCase):
         self.assertTrue(any("tab=9" in url for url in calls))
         self.assertIn("03-17", plain)
         self.assertIn("+19,498,268", plain)
+
+STRUCTURED_CARD_ATTR_EXP_HTML = """
+<html>
+  <body>
+    <div class="exp-card">
+      <span class="date">03-24</span>
+      <span class="exp-mobile">0</span>
+      <span class="exp-value" aria-label="exp change" data-order="531262"></span>
+      <span class="rank" data-order="164"></span>
+      <span class="experience" data-order="925000000"></span>
+    </div>
+    <div class="exp-card">
+      <span class="date">03-25</span>
+      <span class="exp-mobile">0</span>
+      <span class="exp-value" aria-label="exp change" data-order="18451234"></span>
+      <span class="rank" data-order="165"></span>
+      <span class="experience" data-order="943451234"></span>
+    </div>
+    <div>Total in month +18,982,496</div>
+  </body>
+</html>
+"""
+
+
+class GuildStatsStructuredAttrLayoutTests(unittest.TestCase):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value=STRUCTURED_CARD_ATTR_EXP_HTML)
+    def test_light_only_prefers_structured_attr_values_over_visible_zeroes(self, _mock_fetch_html):
+        rows = fetch_guildstats_exp_changes("Elder Tree", light_only=True)
+        self.assertEqual(
+            rows,
+            [
+                {"date": "2026-03-24", "exp_change": "+531,262", "exp_change_int": 531262},
+                {"date": "2026-03-25", "exp_change": "+18,451,234", "exp_change_int": 18451234},
+            ],
+        )
