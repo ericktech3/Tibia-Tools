@@ -543,3 +543,31 @@ class GuildStatsStructuredAttrLayoutTests(unittest.TestCase):
                 {"date": "2026-03-25", "exp_change": "+18,451,234", "exp_change_int": 18451234},
             ],
         )
+
+
+STRUCTURED_SUMMARY_AND_REPEATED_CARDS_HTML = """
+<html>
+  <body>
+    <div class="summary-card">Best recorded day 03-24 Change +91,111,111</div>
+    <div class="history-list">
+      <div class="exp-card"><span class="date">03-24</span><span class="label">Exp change</span><span class="value" data-order="531262">0</span></div>
+      <div class="exp-card"><span class="date">03-25</span><span class="label">Exp change</span><span class="value" data-order="18451234">0</span></div>
+      <div class="exp-card"><span class="date">03-26</span><span class="label">Exp change</span><span class="value" data-order="0">0</span></div>
+    </div>
+  </body>
+</html>
+"""
+
+
+class GuildStatsStructuredGroupPreferenceTests(unittest.TestCase):
+    @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value=STRUCTURED_SUMMARY_AND_REPEATED_CARDS_HTML)
+    def test_prefers_repeated_card_group_over_single_summary_block(self, _mock_fetch_html):
+        rows = fetch_guildstats_exp_changes("Monk Curandeiro", light_only=True)
+        self.assertEqual(
+            rows,
+            [
+                {"date": "2026-03-24", "exp_change": "+531,262", "exp_change_int": 531262},
+                {"date": "2026-03-25", "exp_change": "+18,451,234", "exp_change_int": 18451234},
+                {"date": "2026-03-26", "exp_change": "0", "exp_change_int": 0},
+            ],
+        )

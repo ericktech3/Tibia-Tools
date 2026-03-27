@@ -969,6 +969,16 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 def _parse_rows_from_flat_text_source(text_flat: str) -> List[Dict[str, Any]]:
                     rows: List[Dict[str, Any]] = []
                     seen_dates = set()
+                    text_flat = re.sub(
+                        r"(?i)\bbest recorded day\b\s+(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4}|\d{2}-\d{2})\s+(?:change\s+)?[+-]?\d[\d,.]*",
+                        " ",
+                        text_flat or "",
+                    )
+                    text_flat = re.sub(
+                        r"(?i)\b(?:average daily exp|level prediction)\b.*?(?=(?:\b\d{4}-\d{2}-\d{2}\b|\b\d{2}[./-]\d{2}[./-]\d{4}\b|\b\d{2}-\d{2}\b)\s+(?:exp\s*change|change)\b)",
+                        " ",
+                        text_flat,
+                    )
                     date_block_re = re.compile(
                         r"(?P<date>\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4}|\d{2}-\d{2})\b)(?P<body>.*?)(?=(?:\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4}|\d{2}-\d{2})\b)|$)",
                         re.S,
@@ -1330,9 +1340,11 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                     has_change_context = any(marker in low_payload for marker in (
                         "exp change", "change", "gain", "avg exp", "average daily exp", "time on-line", "time online",
                     )) or any(marker in attr_blob for marker in ("exp change", "change", "gain"))
-                    if ("best recorded day" in low_payload or "average daily exp" in low_payload) and not has_change_context:
-                        return None
                     if not has_change_context:
+                        return None
+                    if any(marker in low_payload for marker in (
+                        "best recorded day", "average daily exp", "level prediction",
+                    )) and not re.search(r"(?i)\b(?:date|data)\b.*\b(?:exp\s*change|change|mudan[çc]a\s+de\s+exp)\b", low_payload):
                         return None
 
                     labeled = re.search(
@@ -1343,6 +1355,19 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                         raw = str(labeled.group("value") or "").strip().replace(" ", "")
                         parsed = _parse_exp_to_int_fast(raw)
                         if parsed is not None and 0 <= abs(int(parsed)) <= 300_000_000 and (raw.lstrip().startswith(("+", "-")) or abs(int(parsed)) >= 100 or int(parsed) == 0):
+                            if int(parsed) == 0 and attr_values:
+                                numeric_attrs: List[int] = []
+                                for raw_attr in attr_values:
+                                    parsed_attr = _parse_exp_to_int_fast(raw_attr)
+                                    if parsed_attr is None:
+                                        continue
+                                    attr_abs = abs(int(parsed_attr))
+                                    if attr_abs < 10_000 or attr_abs > 300_000_000:
+                                        continue
+                                    numeric_attrs.append(int(parsed_attr))
+                                if numeric_attrs:
+                                    best_val = max(numeric_attrs, key=lambda v: abs(int(v)))
+                                    return (_format_exp_text(int(best_val)), int(best_val))
                             out = raw
                             if not raw.lstrip().startswith(("+", "-")) and int(parsed) > 0:
                                 out = _format_exp_text(int(parsed))
@@ -1399,10 +1424,74 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                         return ("0", 0)
                     return None
 
-                seen_dates = set()
-                rows: List[Dict[str, Any]] = []
                 preferred_tags = {"tr": 40, "li": 32, "article": 28, "section": 26, "div": 24}
 
+                def _container_signature(node: Any) -> tuple[str, str, str, str]:
+                    tag_name = getattr(node, "name", "") or "div"
+                    try:
+                        classes = tuple(sorted(str(c) for c in (node.get("class") or [])))
+                    except Exception:
+                        classes = tuple()
+                    parent = getattr(node, "parent", None)
+                    parent_name = getattr(parent, "name", "") or ""
+                    try:
+                        parent_classes = tuple(sorted(str(c) for c in ((parent.get("class") if parent else None) or [])))
+                    except Exception:
+                        parent_classes = tuple()
+                    return (tag_name, " ".join(classes), parent_name, " ".join(parent_classes))
+
+                def _build_grouped_rows() -> List[Dict[str, Any]]:
+                    groups: Dict[tuple[str, str, str, str], List[Dict[str, Any]]] = {}
+                    for container in soup_local.find_all(list(preferred_tags.keys())):
+                        payload_text = re.sub(r"\s+", " ", container.get_text(" ", strip=True) or "").strip()
+                        if not payload_text or len(payload_text) > 500:
+                            continue
+                        low_payload = payload_text.lower()
+                        if any(marker in low_payload for marker in (
+                            "guildstats.eu", "total in month", "total no mes", "total no mês",
+                            "best recorded day", "average daily exp", "level prediction",
+                        )):
+                            continue
+                        date_hits = re.findall(r"\b(?:\d{4}-\d{2}-\d{2}|\d{2}[./-]\d{2}[./-]\d{4}|\d{2}-\d{2})\b", payload_text)
+                        if len(date_hits) != 1:
+                            continue
+                        date_iso = _extract_date_iso(date_hits[0])
+                        if not date_iso:
+                            continue
+                        attr_values = _iter_attr_values(container)
+                        picked = _pick_exp_from_payload(payload_text, attr_values)
+                        if not picked:
+                            continue
+                        out_txt, out_int = picked
+                        sig = _container_signature(container)
+                        groups.setdefault(sig, []).append({
+                            'date': date_iso,
+                            'exp_change': out_txt,
+                            'exp_change_int': int(out_int),
+                        })
+
+                    best_rows: List[Dict[str, Any]] = []
+                    best_score = -(10 ** 9)
+                    for sig, raw_rows in groups.items():
+                        uniq: Dict[str, Dict[str, Any]] = {}
+                        for row in raw_rows:
+                            uniq[str(row['date'])] = row
+                        rows = [uniq[k] for k in sorted(uniq.keys())]
+                        if len(rows) < 2:
+                            continue
+                        score = _rows_quality(rows, hint=85_000)
+                        score += preferred_tags.get(sig[0], 10) * 10
+                        if score > best_score:
+                            best_score = score
+                            best_rows = rows
+                    return best_rows
+
+                grouped_rows = _build_grouped_rows()
+                if grouped_rows:
+                    return grouped_rows
+
+                seen_dates = set()
+                rows: List[Dict[str, Any]] = []
                 for text_node in soup_local.find_all(string=True):
                     raw_text = re.sub(r"\s+", " ", str(text_node or "")).strip()
                     if not raw_text:
@@ -1431,7 +1520,10 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                         if not payload_text:
                             continue
                         low_payload = payload_text.lower()
-                        if any(marker in low_payload for marker in ("total in month", "total no mes", "total no mês", "guildstats.eu")):
+                        if any(marker in low_payload for marker in (
+                            "total in month", "total no mes", "total no mês", "guildstats.eu",
+                            "best recorded day", "average daily exp", "level prediction",
+                        )):
                             continue
                         header_pos = low_payload.find("date exp change")
                         date_pos = low_payload.find(str(raw_text or "").lower())
@@ -1467,6 +1559,8 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                         'exp_change_int': int(out_int),
                     })
 
+                if len(rows) == 1:
+                    return []
                 return rows
 
             fast_candidates: List[Any] = []
@@ -1477,7 +1571,7 @@ def fetch_guildstats_exp_changes(name: str, timeout: int = 12, *, light_only: bo
                 _remember_candidate(fast_candidates, 'best-table-fragment', _parse_rows(frag), hint=3_000)
 
             if _looks_like_guildstats_exp_page(html):
-                _remember_candidate(fast_candidates, 'structured-blocks', _parse_rows_from_structured_blocks(html), hint=120_000)
+                _remember_candidate(fast_candidates, 'structured-blocks', _parse_rows_from_structured_blocks(html), hint=70_000)
                 _remember_candidate(fast_candidates, 'flat-text', _parse_rows_from_flat_text(html), hint=6_000)
             else:
                 _diag_log('skip flat-text parser because html is not confirmed as experience page')
