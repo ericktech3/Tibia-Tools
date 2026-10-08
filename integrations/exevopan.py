@@ -272,7 +272,10 @@ def fetch_exevopan_bosses(world: str, timeout: int = 20) -> List[Dict[str, str]]
         return []
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Android) TibiaTools/1.0",
+        "User-Agent": (
+            "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
+        ),
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
