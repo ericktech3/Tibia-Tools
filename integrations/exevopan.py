@@ -22,8 +22,8 @@ _CHANCE_RE = (
 
 # "Expected in" (EN) ou "Aparecerá em" (PT). Às vezes vem grudado.
 _EXPECTED_RE = re.compile(
-    r"(?:Expected in:|Aparecerá em:|Aparecera em:)\s*"
-    r"\d+\s*(?:day|days|dia|dias|hour|hours|hora|horas|minute|minutes|minuto|minutos)",
+    r"(?:Expected\s+in|Aparecer[áa]\s+em)\s*:\s*"
+    r"\d+\s*(?:days?|dias?|hours?|horas?|minutes?|minutos?)\b",
     re.I,
 )
 
@@ -98,8 +98,7 @@ def _normalize_expected(s: str) -> str:
     if not s:
         return ""
     s = re.sub(r"\s+", " ", s)
-    s = s.replace("Aparecerá em:", "Expected in:")
-    s = s.replace("Aparecera em:", "Expected in:")
+    s = re.sub(r"^(?:Expected\s+in|Aparecer[áa]\s+em)\s*:\s*", "Expected in: ", s, flags=re.I)
     # unidades PT -> EN
     s = s.replace(" dias", " days").replace(" dia", " day")
     s = s.replace(" horas", " hours").replace(" hora", " hour")
@@ -232,9 +231,10 @@ def _parse_from_text(html: str) -> List[Dict[str, str]]:
 
         chance = _normalize_chance(m.group("chance") or "")
 
-        # pega "Expected in" logo depois (janela pequena para não misturar bosses)
-        tail = text[m.end(): m.end() + 200]
-        em = _EXPECTED_RE.search(tail)
+        # A previsão deve vir imediatamente após a chance do próprio boss.
+        # Não busca adiante para não copiar a previsão do boss seguinte.
+        tail = text[m.end(): m.end() + 200].lstrip()
+        em = _EXPECTED_RE.match(tail)
         status = _normalize_expected(em.group(0)) if em else ""
 
         out.append({"boss": boss, "chance": chance, "status": status})
