@@ -2046,12 +2046,42 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         if self._menu_world:
             self._menu_world.dismiss()
 
-    def bosses_fetch(self):
+    def _boss_loading(self, on: bool):
+        try:
+            bar = self.root.get_screen("bosses").ids.boss_loading
+            bar.opacity = 1 if on else 0
+            bar.start() if on else bar.stop()
+        except Exception:
+            pass
+
+    def bosses_auto_load(self):
+        """Ao abrir a tela, busca sozinho o último world usado."""
+        try:
+            scr = self.root.get_screen("bosses")
+            if not (scr.ids.world_field.text or "").strip():
+                scr.ids.world_field.text = str(self._prefs_get("boss_last_world", "") or "")
+            if (scr.ids.world_field.text or "").strip() and not getattr(scr, "_loading", False):
+                self.bosses_fetch(silent=True)
+        except Exception:
+            pass
+
+    def bosses_fetch(self, force: bool = False, silent: bool = False):
         scr = self.root.get_screen("bosses")
         world = (scr.ids.world_field.text or "").strip()
         if not world:
-            self.toast("Digite o world.")
+            if not silent:
+                self.toast("Digite o world.")
             return
+        if getattr(scr, "_loading", False):
+            return
+        scr._loading = True
+        self._boss_loading(True)
+        if force:
+            try:
+                from core.http_cache import clear as _clear_http
+                _clear_http()
+            except Exception:
+                pass
 
         try:
             self._prefs_set("boss_last_world", world)
@@ -2070,7 +2100,13 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
                 bosses = fetch_exevopan_bosses(world)
                 Clock.schedule_once(lambda *_: self._bosses_done(bosses), 0)
             except Exception as e:
-                Clock.schedule_once(lambda *_: setattr(scr.ids.boss_status, "text", f"Erro: {e}"), 0)
+                msg = f"Erro: {e}"
+                Clock.schedule_once(lambda *_: setattr(scr.ids.boss_status, "text", msg), 0)
+            finally:
+                def _end(*_):
+                    scr._loading = False
+                    self._boss_loading(False)
+                Clock.schedule_once(_end, 0)
 
         threading.Thread(target=run, daemon=True).start()
 
