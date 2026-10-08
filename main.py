@@ -29,6 +29,12 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 from typing import List, Optional
 
+try:
+    from core.http_cache import install as _install_http_cache
+    _install_http_cache()  # cache + conexões reaproveitadas + retry
+except Exception:
+    pass
+
 from kivy.core.clipboard import Clipboard
 from kivy.core.window import Window
 from kivy.lang import Builder
