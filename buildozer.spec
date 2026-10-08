@@ -63,10 +63,10 @@ android.ndk = 25b
 android.archs = arm64-v8a,armeabi-v7a
 android.release_artifact = apk
 
-# Use a newer python-for-android (p4a) checkout when building.
-# This can help with device/OS-specific native crashes on newer Android versions.
-# If it causes build issues in your environment, remove these 2 lines.
-p4a.branch = master
+# Fixa uma versão estável do python-for-android (p4a).
+# NÃO usar "master": a versão mais recente migrou para Python 3.14 e quebra
+# na atualização do pip durante a compilação (cannot import name '...').
+p4a.branch = v2024.01.21
 # p4a.commit = <optional specific commit SHA>
 
 # Permissões mínimas (INTERNET é essencial se você busca dados online)
@@ -78,7 +78,6 @@ android.add_src = android_src
 # can generate an invalid AndroidManifest.xml (manifest merger fails).
 # We register our BootReceiver using a python-for-android hook instead.
 p4a.hook = p4a/hook.py
-p4a.branch = v2024.01.21
 # Tipo de foreground service (ajuda em Androids mais novos/OEMs). Como o serviço
 # faz polling de rede, dataSync é o mais apropriado.
 android.foreground_service_type = dataSync
