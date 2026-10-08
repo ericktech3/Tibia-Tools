@@ -365,6 +365,26 @@ def _fetch_guildstats_exp_html(name: str, timeout: int = 12) -> str:
 
     _diag_log(f"fetch start name={name!r}")
 
+    # Layout novo (2026): a aba de Experience e carregada via AJAX em
+    # include/character/tab.php?nick=...&tab=experience. A pagina principal
+    # nao contem mais a tabela, por isso os valores vinham zerados.
+    for ajax_url in (
+        f"https://guildstats.eu/include/character/tab.php?nick={enc_plus}&tab=experience",
+        f"https://guildstats.eu/include/character/tab.php?nick={enc_quote}&tab=experience",
+    ):
+        try:
+            ajax_headers = dict(headers)
+            ajax_headers["Referer"] = f"https://guildstats.eu/character?nick={enc_plus}"
+            ajax_headers["X-Requested-With"] = "XMLHttpRequest"
+            r = session.get(ajax_url, headers=ajax_headers, timeout=timeout)
+            txt = r.text or ""
+            if r.status_code < 400 and "Exp change" in txt and "<tr" in txt:
+                _diag_log(f"ajax ok url={ajax_url} len={len(txt)}")
+                return txt
+            _diag_log(f"ajax miss url={ajax_url} status={r.status_code} len={len(txt)}")
+        except Exception as e:
+            _diag_log(f"ajax error url={ajax_url} err={e!r}")
+
     base_html = ""
     base_url_used = ""
     for url in _unique_preserve_order(base_urls):
