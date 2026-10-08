@@ -45,6 +45,7 @@ def _install_kivy_stubs():
 
     kivy_properties = types.ModuleType("kivy.properties")
     kivy_properties.StringProperty = lambda *args, **kwargs: None
+    kivy_properties.NumericProperty = lambda *args, **kwargs: None
 
     kivy_screenmanager = types.ModuleType("kivy.uix.screenmanager")
     kivy_screenmanager.ScreenManager = type("ScreenManager", (), {})
