@@ -78,6 +78,7 @@ android.add_src = android_src
 # can generate an invalid AndroidManifest.xml (manifest merger fails).
 # We register our BootReceiver using a python-for-android hook instead.
 p4a.hook = p4a/hook.py
+p4a.branch = v2024.01.21
 # Tipo de foreground service (ajuda em Androids mais novos/OEMs). Como o serviço
 # faz polling de rede, dataSync é o mais apropriado.
 android.foreground_service_type = dataSync
