@@ -30,17 +30,17 @@ from urllib.parse import quote
 from typing import List, Optional
 
 try:
-    from core.http_cache import install as _install_http_cache
+    from core.http_cache import install as _install_http_cache, configure_disk as _configure_http_disk
     _install_http_cache()  # cache + conexões reaproveitadas + retry
 except Exception:
-    pass
+    _configure_http_disk = None
 
 from kivy.core.clipboard import Clipboard
 from kivy.core.window import Window
 from kivy.lang import Builder
 from kivy.clock import Clock
 from kivy.metrics import dp
-from kivy.properties import StringProperty
+from kivy.properties import StringProperty, NumericProperty
 from kivy.uix.screenmanager import ScreenManager
 from kivy.utils import platform
 from kivy.uix.behaviors import ButtonBehavior
@@ -117,6 +117,9 @@ class ClickableRow(RectangularRippleBehavior, ButtonBehavior, MDBoxLayout):
 
 
 class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsControllerMixin, InfrastructureMixin, MDApp):
+    # Altura da barra de status do Android (dp) — usada pelo StatusBarSpacer no KV
+    status_bar_height_dp = NumericProperty(0)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.favorites: List[str] = []
@@ -180,6 +183,13 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             ok_dir = os.getcwd()
         self.data_dir = ok_dir
 
+        # Cache HTTP em disco: app abre instantâneo e funciona offline com os últimos dados
+        try:
+            if _configure_http_disk is not None:
+                _configure_http_disk(os.path.join(self.data_dir, "http_cache"))
+        except Exception:
+            pass
+
         self.fav_path = os.path.join(self.data_dir, "favorites.json")
         self.prefs_path = os.path.join(self.data_dir, "prefs.json")
         self.cache_path = os.path.join(self.data_dir, "cache.json")
@@ -241,6 +251,10 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         self.theme_cls.primary_palette = "Blue"
         self.theme_cls.theme_style = "Dark"
 
+        # Android 15+ desenha o app sob a barra de status: detecta a altura dela
+        # para o StatusBarSpacer (KV) afastar o conteúdo do topo.
+        self._detect_status_bar_height()
+
         # Se algum import do core falhar no Android, mostre na tela em vez de fechar.
         if _CORE_IMPORT_ERROR is not None:
             print(_CORE_IMPORT_ERROR)
@@ -290,6 +304,33 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
 
         self._bind_android_back()
         return root
+
+    def _detect_status_bar_height(self):
+        """Calcula a altura da barra de status (dp) no Android; 0 nas demais plataformas."""
+        try:
+            if platform != "android":
+                return
+            from jnius import autoclass  # type: ignore
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            activity = PythonActivity.mActivity
+            density = float(activity.getResources().getDisplayMetrics().density or 1.0)
+            top = 0
+            try:
+                insets = activity.getWindow().getDecorView().getRootWindowInsets()
+                if insets is not None:
+                    WindowInsetsType = autoclass("android.view.WindowInsetsType")
+                    top = int(insets.getInsets(WindowInsetsType.statusBars()).top)
+            except Exception:
+                top = 0
+            if top <= 0:
+                res = activity.getResources()
+                rid = res.getIdentifier("status_bar_height", "dimen", "android")
+                if rid > 0:
+                    top = int(res.getDimensionPixelSize(rid))
+            if top > 0:
+                self.status_bar_height_dp = max(0.0, float(top) / density)
+        except Exception:
+            pass
 
     def _safe_call(self, fn, *args, **kwargs):
         """Executa fn e captura exceções, evitando fechar o app no Android."""
@@ -517,6 +558,16 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
     def _handle_back_navigation(self) -> bool:
         if self.navigate_back():
             return True
+
+        # Sem histórico: se não estamos na aba inicial, volta para ela em vez de fechar o app
+        try:
+            current = getattr(self, "_nav_current_route", None) or self._get_current_route()
+        except Exception:
+            current = None
+        home_route = ("home", "tab_dashboard")
+        if current and tuple(current) != home_route:
+            if self._navigate_to_route(home_route, record=False):
+                return True
 
         now = time.monotonic()
         if (now - float(getattr(self, "_last_back_press_ts", 0.0) or 0.0)) < 2.0:
@@ -2172,6 +2223,10 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             # não suja o status se for atualização usada pelo dashboard
             if not (scr.ids.boost_status.text or "").strip():
                 scr.ids.boost_status.text = "Atualizando..."
+        try:
+            scr.ids.boost_loading.opacity = 1
+        except Exception:
+            pass
 
         def run():
             data = None
@@ -2186,6 +2241,10 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
                 try:
                     with self._boosted_lock:
                         self._boosted_inflight = False
+                except Exception:
+                    pass
+                try:
+                    scr.ids.boost_loading.opacity = 0
                 except Exception:
                     pass
 

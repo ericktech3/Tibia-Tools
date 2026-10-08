@@ -2,11 +2,20 @@
     MDBoxLayout:
         orientation: "vertical"
 
+        StatusBarSpacer:
+
         MDTopAppBar:
             title: "Boosted"
             left_action_items: [["arrow-left", lambda x: app.navigate_back()]]
-            right_action_items: [["refresh", lambda x: app.update_boosted()]]
+            right_action_items: [["refresh", lambda x: app.update_boosted(force=True)]]
             elevation: 2
+
+        MDProgressBar:
+            id: boost_loading
+            type: "indeterminate"
+            size_hint_y: None
+            height: dp(4)
+            opacity: 0
 
         MDScrollView:
             do_scroll_x: False

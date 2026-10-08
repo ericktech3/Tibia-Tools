@@ -6,6 +6,9 @@ retry em falhas temporárias e cache em memória por alguns minutos.
 """
 from __future__ import annotations
 
+import hashlib
+import os
+import pickle
 import threading
 import time
 from urllib.parse import urlparse
@@ -36,6 +39,59 @@ _inflight: dict = {}
 _session: requests.Session | None = None
 _orig_get = requests.get
 _installed = False
+_disk_dir: str | None = None
+
+
+def configure_disk(directory: str):
+    """Ativa cache em disco: sobrevive ao fechar o app e serve de fallback offline."""
+    global _disk_dir
+    try:
+        os.makedirs(directory, exist_ok=True)
+        _disk_dir = directory
+    except Exception:
+        _disk_dir = None
+
+
+def _disk_file(k):
+    if not _disk_dir:
+        return None
+    return os.path.join(_disk_dir, hashlib.md5(repr(k).encode("utf-8")).hexdigest() + ".bin")
+
+
+def _disk_save(k, r):
+    p = _disk_file(k)
+    if not p:
+        return
+    try:
+        with open(p, "wb") as f:
+            pickle.dump({"status": r.status_code, "headers": dict(r.headers),
+                         "content": r.content, "url": r.url}, f)
+    except Exception:
+        pass
+
+
+def _stale_response(k, url):
+    """Última resposta boa conhecida (memória de qualquer idade ou disco)."""
+    with _lock:
+        hit = _cache.get(k)
+    if hit:
+        return hit[1]
+    p = _disk_file(k)
+    if p and os.path.exists(p):
+        try:
+            with open(p, "rb") as f:
+                d = pickle.load(f)
+            resp = requests.Response()
+            resp.status_code = d["status"]
+            resp._content = d["content"]
+            resp.headers.update(d["headers"])
+            resp.url = d.get("url") or url
+            with _lock:
+                _cache[k] = (time.time(), resp)
+            return resp
+        except Exception:
+            return None
+    return None
 
 
 def _make_session() -> requests.Session:
@@ -89,7 +145,14 @@ def cached_get(url, params=None, **kwargs):
             return hit[1]
         return _session.get(url, **kwargs)
     try:
-        r = _session.get(url, **kwargs)
+        try:
+            r = _session.get(url, **kwargs)
+        except Exception:
+            # Sem internet (ou site fora): devolve a última resposta salva, se houver
+            stale = _stale_response(k, url)
+            if stale is not None:
+                return stale
+            raise
         if r.status_code == 200:
             _ = r.content  # garante corpo carregado
             with _lock:
@@ -97,6 +160,12 @@ def cached_get(url, params=None, **kwargs):
                     oldest = min(_cache, key=lambda x: _cache[x][0])
                     _cache.pop(oldest, None)
                 _cache[k] = (time.time(), r)
+            _disk_save(k, r)
+        else:
+            # Erro no site (403/500...): prefere dado antigo a tela vazia
+            stale = _stale_response(k, url)
+            if stale is not None:
+                return stale
         return r
     finally:
         with _lock:
