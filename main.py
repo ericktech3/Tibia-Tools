@@ -71,10 +71,12 @@ try:
         fetch_guildstats_exp_changes,
     )
     from integrations.tibia_com import is_character_online_tibia_com, fetch_last_login_dt, parse_tibia_datetime
-    from integrations.exevopan import fetch_exevopan_bosses
+    from integrations.exevopan import fetch_exevopan_bosses, fetch_exevopan_result
     from core.exp_loss import estimate_death_exp_lost
     from core.storage import get_data_dir, safe_read_json, safe_write_json
-    from core.boosted import fetch_boosted
+    from core.boosted import fetch_boosted, fetch_boosted_result
+    from core.result import Result as _Result
+    from features.bosses import logic as _boss_logic
     from core.training import TrainingInput, compute_training_plan
     from core.hunt import parse_hunt_session_text
     from core.imbuements import fetch_imbuements_table, fetch_imbuement_details, ImbuementEntry
@@ -1713,28 +1715,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
 
 
     def _boss_chance_score(self, chance: str) -> float:
-        c = (chance or "").strip().lower()
-        if not c:
-            return 0.0
-        m = re.search(r"(\d+(?:[.,]\d+)?)\s*%", c)
-        if m:
-            try:
-                return float(m.group(1).replace(",", "."))
-            except Exception:
-                return 0.0
-        if "no chance" in c or "sem chance" in c:
-            return 0.0
-        if "unknown" in c or "desconhecido" in c:
-            return 0.0
-        if "very low" in c:
-            return 10.0
-        if "low chance" in c or c == "low":
-            return 25.0
-        if "medium chance" in c or c == "medium":
-            return 50.0
-        if "high chance" in c or c == "high":
-            return 75.0
-        return 0.0
+        return _boss_logic.chance_score(chance)
 
     def boss_is_favorite(self, boss_name: str) -> bool:
         favs = self._prefs_get("boss_favorites", []) or []
@@ -1922,40 +1903,9 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         if not isinstance(favs, list):
             favs = []
 
-        def match(b: dict) -> bool:
-            name = str(b.get("boss") or b.get("name") or "")
-            if q and q not in name.lower():
-                return False
-            if fav_only and name not in favs:
-                return False
-
-            chance = str(b.get("chance") or "")
-            score = self._boss_chance_score(chance)
-            lowc = chance.lower()
-
-            if bf == "High":
-                return score >= 70.0
-            if bf == "Medium+":
-                return score >= 40.0
-            if bf == "Low+":
-                return score >= 10.0
-            if bf == "No chance":
-                return ("no chance" in lowc) or ("sem chance" in lowc)
-            if bf == "Unknown":
-                return score == 0.0 and ("unknown" in lowc or "desconhecido" in lowc or (not chance))
-            return True
-
-        filtered = [b for b in bosses if isinstance(b, dict) and match(b)]
-
-        if bs == "Name":
-            filtered.sort(key=lambda b: str(b.get("boss") or b.get("name") or "").lower())
-        elif bs == "Favorites first":
-            def key(b):
-                nm = str(b.get("boss") or b.get("name") or "")
-                return (0 if nm in favs else 1, -self._boss_chance_score(str(b.get("chance") or "")), nm.lower())
-            filtered.sort(key=key)
-        else:
-            filtered.sort(key=lambda b: self._boss_chance_score(str(b.get("chance") or "")), reverse=True)
+        filtered = _boss_logic.filter_and_sort(
+            bosses, query=q, chance_filter=bf, sort=bs, favorites=favs, fav_only=fav_only,
+        )
 
         scr.ids.boss_list.clear_widgets()
         scr.ids.boss_status.text = f"Bosses: {len(filtered)} (de {len(bosses)})"
@@ -1968,10 +1918,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
 
         for b in filtered[:200]:
             name = str(b.get("boss") or b.get("name") or "Boss")
-            chance = str(b.get("chance") or "").strip()
-            status = str(b.get("status") or "").strip()
-            sec = " • ".join([x for x in [chance, status] if x]) or " "
-            item = TwoLineIconListItem(text=name, secondary_text=sec)
+            item = TwoLineIconListItem(text=name, secondary_text=_boss_logic.secondary_text(b))
             icon = "star" if self.boss_is_favorite(name) else "skull"
             item.add_widget(IconLeftWidget(icon=icon))
             item.bind(on_release=lambda _it, bb=b: self.bosses_open_dialog(bb))
@@ -2251,18 +2198,30 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
 
         def run():
             try:
-                bosses = fetch_exevopan_bosses(world)
-                Clock.schedule_once(lambda *_: self._bosses_done(bosses), 0)
-            except Exception as e:
-                msg = f"Erro: {e}"
-                Clock.schedule_once(lambda *_: setattr(scr.ids.boss_status, "text", msg), 0)
-            finally:
-                def _end(*_):
-                    scr._loading = False
-                    self._boss_loading(False)
-                Clock.schedule_once(_end, 0)
+                res = fetch_exevopan_result(world)
+            except Exception as e:  # rede de segurança: nunca derruba o app
+                res = _Result.from_exception(e)
+            Clock.schedule_once(lambda *_: self._bosses_result(res), 0)
+
+            def _end(*_):
+                scr._loading = False
+                self._boss_loading(False)
+            Clock.schedule_once(_end, 0)
 
         threading.Thread(target=run, daemon=True).start()
+
+    def _bosses_result(self, res):
+        scr = self.root.get_screen("bosses")
+        if not res.ok:
+            scr.ids.boss_list.clear_widgets()
+            scr.ids.boss_status.text = res.user_message()
+            return
+        self._bosses_done(res.data)
+        if res.stale:
+            try:
+                scr.ids.boss_status.text += f"  (sem internet — dados de {res.age_text()})"
+            except Exception:
+                pass
 
     def _bosses_done(self, bosses):
         scr = self.root.get_screen("bosses")
@@ -2332,12 +2291,10 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             pass
 
         def run():
-            data = None
-            err = None
             try:
-                data = fetch_boosted()
-            except Exception as e:
-                err = e
+                res = fetch_boosted_result()
+            except Exception as e:  # rede de segurança
+                res = _Result.from_exception(e)
 
             def finish(*_):
                 # libera o in-flight guard SEMPRE (sucesso ou erro)
@@ -2351,15 +2308,20 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
                 except Exception:
                     pass
 
-                if err is not None:
+                if not res.ok:
                     if not silent:
                         try:
-                            scr.ids.boost_status.text = f"Erro: {err}"
+                            scr.ids.boost_status.text = res.user_message()
                         except Exception:
                             pass
                     return
 
-                self._boosted_done(data, silent=silent)
+                self._boosted_done(res.data, silent=silent)
+                if res.stale:
+                    try:
+                        scr.ids.boost_status.text = f"Sem internet — dados de {res.age_text()}"
+                    except Exception:
+                        pass
 
             Clock.schedule_once(finish, 0)
 
