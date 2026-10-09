@@ -204,6 +204,49 @@ class _StalkerBadge(MDBoxLayout):
 
 
 class CharControllerMixin:
+    def _build_wrapped_info_row(self, text, secondary="", icon="skull"):
+        """Linha com altura calculada pelo texto, sem reticências nem cortes."""
+        row = _StalkerCandidateItem(
+            orientation="horizontal", size_hint_y=None,
+            padding=(dp(12), dp(12), dp(12), dp(12)), spacing=dp(12),
+        )
+        row.bind(minimum_height=row.setter("height"))
+        row.add_widget(MDIcon(
+            icon=icon, size_hint=(None, None), size=(dp(32), dp(32)),
+            pos_hint={"center_y": 0.5},
+        ))
+        column = MDBoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(4))
+        column.bind(minimum_height=column.setter("height"))
+        for value, color in ((text, "Primary"), (secondary, "Secondary")):
+            if not value:
+                continue
+            label = MDLabel(
+                text=str(value), font_style="Body1", theme_text_color=color,
+                size_hint_y=None, shorten=False,
+            )
+            label.bind(width=lambda inst, width: setattr(inst, "text_size", (width, None)))
+            label.bind(texture_size=lambda inst, size: setattr(inst, "height", size[1]))
+            column.add_widget(label)
+        row.add_widget(column)
+        return row
+
+    def _death_display_meta(self, death):
+        raw_date = str(death.get("time") or death.get("date") or "").strip()
+        parsed = self._safe_parse_iso_datetime(raw_date)
+        lines = [parsed.astimezone().strftime("%d/%m/%Y às %H:%M")
+                 if parsed and parsed.tzinfo else
+                 parsed.strftime("%d/%m/%Y às %H:%M") if parsed else raw_date]
+        if death.get("level"):
+            lines.append(f"Nível {death['level']}")
+        xp = death.get("exp_lost") or death.get("xp_lost")
+        if xp:
+            try:
+                xp = f"{int(xp):,}".replace(",", ".")
+            except (TypeError, ValueError):
+                pass
+            lines.append(f"XP perdida: {xp}")
+        return "\n".join(line for line in lines if line)
+
     def _get_home_screen(self):
         root = getattr(self, "root", None)
         if root is None:
@@ -874,35 +917,22 @@ class CharControllerMixin:
                 if _ds["count"]:
                     _txt = f"{_ds['count']} morte(s) recente(s)"
                     if _ds["xp_lost"]:
-                        _txt += f" • XP perdida: {_xp_stats.fmt_compact(_ds['xp_lost'])}"
-                    _hdr = OneLineIconListItem(text=_txt)
-                    _hdr.add_widget(IconLeftWidget(icon="chart-bar"))
+                        _txt += f"\nXP perdida: {_xp_stats.fmt_compact(_ds['xp_lost'])}"
+                    _hdr = self._build_wrapped_info_row(_txt, icon="chart-bar")
                     dlist.add_widget(_hdr)
             except Exception:
                 pass
             for d in deaths_list[:10]:
-                time_s = str(d.get("time") or d.get("date") or "").strip()
-                lvl_s = str(d.get("level") or "").strip()
-                xp_s = str(d.get("exp_lost") or d.get("xp_lost") or "").strip()
                 reason_s = str(d.get("reason") or d.get("description") or "").strip()
                 if not reason_s:
                     continue
-
-                meta = time_s
-                if lvl_s:
-                    meta = (meta + f" • lvl {lvl_s}").strip(" •")
-                if xp_s:
-                    meta = (meta + f" • xp {xp_s}").strip(" •")
-
-                short_reason = self._shorten_death_reason(reason_s)
-                it = TwoLineIconListItem(text=short_reason or reason_s, secondary_text=meta or " ")
-                it.add_widget(IconLeftWidget(icon="skull"))
+                meta = self._death_display_meta(d)
+                it = self._build_wrapped_info_row(reason_s, meta, icon="skull")
                 it.bind(on_release=lambda *_ , rr=reason_s, mm=meta: self._show_text_dialog("Morte", f"{rr}\n\n{mm}".strip()))
                 dlist.add_widget(it)
 
             if len(dlist.children) == 0:
-                ditem = OneLineIconListItem(text="Sem mortes recentes (ou sem dados).")
-                ditem.add_widget(IconLeftWidget(icon="skull-outline"))
+                ditem = self._build_wrapped_info_row("Sem mortes recentes (ou sem dados).", icon="skull-outline")
                 dlist.add_widget(ditem)
 
             # ----------------------------
