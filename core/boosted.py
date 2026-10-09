@@ -70,44 +70,64 @@ def _cache_sprite(url: str, cache_dir: str, prefix: str) -> str:
         return raw_path
     return ""
 
-def fetch_boosted():
-    """Retorna boosted creature e boosted boss usando TibiaData v4.
-
-    Além dos nomes, tenta retornar também os sprites (image_url) quando disponíveis.
-    """
+def _sprite_dir() -> str:
+    # No Android, precisa ser um diretório gravável (user_data_dir).
     try:
-        c = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10).json()
-        b = requests.get("https://api.tibiadata.com/v4/boostablebosses", timeout=10).json()
+        from kivy.app import App
 
-        c_boosted = ((c.get("creatures") or {}).get("boosted") or {})
-        b_boosted = ((b.get("boostable_bosses") or {}).get("boosted") or {})
-
-        creature = c_boosted.get("name", "N/A")
-        boss = b_boosted.get("name", "N/A")
-
-        creature_image_url = c_boosted.get("image_url") or ""
-        boss_image_url = b_boosted.get("image_url") or ""
-
-        # cache local (evita placeholder quebrado no AsyncImage, especialmente pra GIF)
-        # No Android, precisa ser um diretório gravável (user_data_dir).
-        try:
-            from kivy.app import App
-
-            app = App.get_running_app()
-            if app and getattr(app, "user_data_dir", None):
-                base_dir = os.path.join(app.user_data_dir, "sprite_cache")
-            else:
-                base_dir = os.path.join(os.getcwd(), ".sprite_cache")
-        except Exception:
-            base_dir = os.path.join(os.getcwd(), ".sprite_cache")
-        creature_image = _cache_sprite(creature_image_url, base_dir, "creature")
-        boss_image = _cache_sprite(boss_image_url, base_dir, "boss")
-
-        return {
-            "creature": creature,
-            "boss": boss,
-            "creature_image": creature_image,
-            "boss_image": boss_image,
-        }
+        app = App.get_running_app()
+        if app and getattr(app, "user_data_dir", None):
+            return os.path.join(app.user_data_dir, "sprite_cache")
     except Exception:
-        return None
+        pass
+    return os.path.join(os.getcwd(), ".sprite_cache")
+
+
+def parse_boosted(creatures_json, bosses_json) -> dict:
+    """Lê o JSON do TibiaData (sem rede). Lança ValueError se o formato mudou."""
+    if not isinstance(creatures_json, dict) or not isinstance(bosses_json, dict):
+        raise ValueError("resposta do TibiaData em formato inesperado")
+    c_boosted = ((creatures_json.get("creatures") or {}).get("boosted") or {})
+    b_boosted = ((bosses_json.get("boostable_bosses") or {}).get("boosted") or {})
+    if not c_boosted and not b_boosted:
+        raise ValueError("boosted ausente na resposta")
+    return {
+        "creature": c_boosted.get("name") or "N/A",
+        "boss": b_boosted.get("name") or "N/A",
+        "creature_image_url": c_boosted.get("image_url") or "",
+        "boss_image_url": b_boosted.get("image_url") or "",
+    }
+
+
+def fetch_boosted_result():
+    """Busca Boosted Creature/Boss e devolve core.result.Result."""
+    from core.result import Result, response_meta, run_safely
+
+    def _run():
+        rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+        rb = requests.get("https://api.tibiadata.com/v4/boostablebosses", timeout=10)
+        rc.raise_for_status()
+        rb.raise_for_status()
+        info = parse_boosted(rc.json(), rb.json())
+        base_dir = _sprite_dir()
+        data = {
+            "creature": info["creature"],
+            "boss": info["boss"],
+            # cache local (evita placeholder quebrado no AsyncImage, especialmente pra GIF)
+            "creature_image": _cache_sprite(info["creature_image_url"], base_dir, "creature"),
+            "boss_image": _cache_sprite(info["boss_image_url"], base_dir, "boss"),
+        }
+        m1, m2 = response_meta(rc), response_meta(rb)
+        return Result.success(
+            data,
+            stale=m1["stale"] or m2["stale"],
+            age_seconds=max(m1["age_seconds"], m2["age_seconds"]),
+        )
+
+    return run_safely(_run)
+
+
+def fetch_boosted():
+    """Compatibilidade: devolve o dicionário ou None em caso de erro."""
+    res = fetch_boosted_result()
+    return res.data if res.ok else None
