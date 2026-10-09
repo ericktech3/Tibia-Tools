@@ -9,9 +9,8 @@
 Bosses, XP, stamina, treino, imbuements e a sua caçada —
 tudo num app Android feito pela guild, para a guild.
 
-<!-- ⚠️ Troque SEU-USUARIO pelo seu nome do GitHub nestas duas linhas -->
-[![CI](https://github.com/SEU-USUARIO/Tibia-Tools/actions/workflows/ci.yml/badge.svg)](https://github.com/SEU-USUARIO/Tibia-Tools/actions/workflows/ci.yml)
-[![Release](https://github.com/SEU-USUARIO/Tibia-Tools/actions/workflows/release.yml/badge.svg)](https://github.com/SEU-USUARIO/Tibia-Tools/actions/workflows/release.yml)
+[![CI](https://github.com/ericktech3/Tibia-Tools/actions/workflows/ci.yml/badge.svg)](https://github.com/ericktech3/Tibia-Tools/actions/workflows/ci.yml)
+[![Release](https://github.com/ericktech3/Tibia-Tools/actions/workflows/release.yml/badge.svg)](https://github.com/ericktech3/Tibia-Tools/actions/workflows/release.yml)
 
 [![Android](https://img.shields.io/badge/Android-APK%20direto-3DDC84?style=for-the-badge&logo=android&logoColor=white)](#-instalar-em-2-minutos)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](#-compilar)
@@ -40,7 +39,7 @@ Funciona no celular e boa parte dele funciona **sem internet**.
 
 ## 📱 Instalar em 2 minutos
 
-1. Abra a aba **[Releases](https://github.com/SEU-USUARIO/Tibia-Tools/releases)** deste repositório.
+1. Abra a aba **[Releases](https://github.com/ericktech3/Tibia-Tools/releases)** deste repositório.
 2. Baixe o arquivo `.apk` mais recente.
 3. Toque no arquivo baixado e aceite a opção de **instalar apps desconhecidos**.
 4. Pronto. Não precisa criar conta nem fazer login.
@@ -187,7 +186,7 @@ buildozer -v android debug
 
 ## 🩹 Deu errado?
 
-Abra uma [issue](https://github.com/SEU-USUARIO/Tibia-Tools/issues) contando o que aconteceu e, se der, anexe o log
+Abra uma [issue](https://github.com/ericktech3/Tibia-Tools/issues) contando o que aconteceu e, se der, anexe o log
 `tibia_tools_crash.log` (fica na pasta do app no celular).
 Erros em tela de bosses, XP e personagem costumam ser mudança no site de origem —
 são rápidos de corrigir assim que a gente vê o log.

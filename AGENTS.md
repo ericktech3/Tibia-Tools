@@ -5,3 +5,4 @@
 - CI (.github/workflows/ci.yml) runs compile, pyflakes (undefined names), KV tab check and unittest on every push. Why: catch breakage before building the APK.
 - Long informational rows use wrapping labels with texture-driven height. Why: deaths and empty-filter messages must remain readable on narrow screens.
 - Shared toolbar alignment is applied after KivyMD calculates its height, and KV fallback mirrors the current screen files. Why: normal and emergency layouts must preserve the same positioning fixes.
+- GitHub cover art lives in docs/github/ as an optimized JPG referenced by README.md, and repo-owner links point at the real GitHub account. Why: the README stays light and every badge and link resolves to the live repository.
