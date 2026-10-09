@@ -406,6 +406,102 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         except Exception:
             log_current_exception()
             self._back_bound = False
+        # Android 13+ (e principalmente Android 16): registra o "voltar" direto no
+        # sistema. Assim o gesto nao fecha o app mesmo que o sistema nao envie
+        # a tecla Voltar para o Kivy.
+        try:
+            self._register_android_back_callback()
+        except Exception:
+            log_current_exception()
+
+    def _register_android_back_callback(self):
+        if platform != "android":
+            return
+        if getattr(self, "_back_invoked_cb", None) is not None:
+            return
+        try:
+            from jnius import autoclass, PythonJavaClass, java_method  # type: ignore
+            VERSION = autoclass("android.os.Build$VERSION")
+            if int(VERSION.SDK_INT) < 33:
+                return
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+        except Exception:
+            log_current_exception()
+            return
+
+        app = self
+
+        class _TTBackCallback(PythonJavaClass):
+            __javainterfaces__ = ["android/window/OnBackInvokedCallback"]
+            __javacontext__ = "app"
+
+            @java_method("()V")
+            def onBackInvoked(self):
+                # Chamado na thread do Android; a navegacao roda na thread do Kivy.
+                try:
+                    Clock.schedule_once(lambda *_: app._on_android_back_invoked(), 0)
+                except Exception:
+                    pass
+
+        def _do_register(*_args):
+            try:
+                activity = PythonActivity.mActivity
+                dispatcher = activity.getOnBackInvokedDispatcher()
+                cb = _TTBackCallback()
+                dispatcher.registerOnBackInvokedCallback(0, cb)  # PRIORITY_DEFAULT
+                # Guarda referencias para o Python nao apagar o callback da memoria.
+                app._back_invoked_cb = cb
+                app._back_invoked_dispatcher = dispatcher
+            except Exception:
+                log_current_exception()
+
+        try:
+            from android.runnable import run_on_ui_thread  # type: ignore
+            run_on_ui_thread(_do_register)()
+        except Exception:
+            _do_register()
+
+    def _unregister_android_back_callback(self):
+        cb = getattr(self, "_back_invoked_cb", None)
+        dispatcher = getattr(self, "_back_invoked_dispatcher", None)
+        if cb is None or dispatcher is None:
+            return
+        try:
+            dispatcher.unregisterOnBackInvokedCallback(cb)
+        except Exception:
+            pass
+        self._back_invoked_cb = None
+        self._back_invoked_dispatcher = None
+
+    def _on_android_back_invoked(self):
+        """Voltar recebido pelo callback do sistema (Android 13+)."""
+        try:
+            handled = self._dispatch_android_back()
+        except Exception:
+            log_current_exception()
+            return
+        if not handled:
+            # Segundo toque na Home: manda o app para segundo plano (como o Android faz).
+            self._send_app_to_background()
+
+    def _send_app_to_background(self):
+        try:
+            from jnius import autoclass  # type: ignore
+            activity = autoclass("org.kivy.android.PythonActivity").mActivity
+
+            def _move(*_args):
+                try:
+                    activity.moveTaskToBack(True)
+                except Exception:
+                    log_current_exception()
+
+            try:
+                from android.runnable import run_on_ui_thread  # type: ignore
+                run_on_ui_thread(_move)()
+            except Exception:
+                _move()
+        except Exception:
+            log_current_exception()
 
     def _unbind_android_back(self):
         try:
@@ -418,6 +514,10 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         except Exception:
             log_current_exception()
         self._back_bound = False
+        try:
+            self._unregister_android_back_callback()
+        except Exception:
+            pass
 
     def _get_current_screen_name(self) -> str:
         try:
