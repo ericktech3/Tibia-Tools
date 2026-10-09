@@ -120,6 +120,7 @@ except Exception:  # pragma: no cover - test fallback
         def add_widget(self, widget):
             self.children.append(widget)
 
+from features.char import xp_stats as _xp_stats
 from integrations.tibiadata import (
     fetch_character_tibiadata,
     fetch_guildstats_deaths_xp,
@@ -133,6 +134,23 @@ from integrations.tibiastalker import (
 )
 from core.exp_loss import estimate_death_exp_lost
 from services.error_reporting import log_current_exception
+
+
+def _friendly_char_error(exc) -> str:
+    """Mensagem amigavel (nunca deve levantar excecao)."""
+    try:
+        txt = str(exc or "").strip()
+        resp = getattr(exc, "response", None)
+        code = int(getattr(resp, "status_code", 0) or 0)
+        if code == 404 or "nao encontrado" in txt.lower() or "não encontrado" in txt.lower():
+            return "Personagem não encontrado."
+        if code >= 500:
+            return "Servidor de dados indisponível. Tente novamente."
+        if "timeout" in txt.lower() or "timed out" in txt.lower():
+            return "Tempo esgotado. Verifique sua internet."
+        return f"Erro: {txt or type(exc).__name__}"
+    except Exception:
+        return "Erro ao buscar personagem."
 
 
 class _StalkerCandidateItem(ButtonBehavior, MDBoxLayout):
@@ -805,44 +823,11 @@ class CharControllerMixin:
                     if loading_gs and not rows:
                         home.ids.char_xp_total.text = "Carregando histórico de XP..."
                         home.ids.char_xp_total.theme_text_color = "Hint"
-                    elif isinstance(exp_total_30, (int, float)) and rows:
-                        # também calcula últimos 7 dias com base na data mais recente do histórico
-                        total_7 = None
-                        try:
-                            ref_dates = []
-                            for rr in rows:
-                                ds0 = str(rr.get("date") or "").strip()
-                                if not ds0:
-                                    continue
-                                try:
-                                    ref_dates.append(datetime.fromisoformat(ds0).date())
-                                except Exception:
-                                    continue
-                            ref = max(ref_dates) if ref_dates else datetime.utcnow().date()
-                            cutoff7 = ref - timedelta(days=7)
-                            s7 = 0
-                            for rr in rows:
-                                ds0 = str(rr.get("date") or "").strip()
-                                if not ds0:
-                                    continue
-                                try:
-                                    d0 = datetime.fromisoformat(ds0).date()
-                                except Exception:
-                                    continue
-                                if d0 < cutoff7:
-                                    continue
-                                try:
-                                    s7 += int(rr.get("exp_change_int") or 0)
-                                except Exception:
-                                    continue
-                            total_7 = int(s7)
-                        except Exception:
-                            total_7 = None
-
-                        if isinstance(total_7, int):
-                            home.ids.char_xp_total.text = f"Total 7d: {fmt_pt(total_7)} XP • 30d: {fmt_pt(int(exp_total_30))} XP"
-                        else:
-                            home.ids.char_xp_total.text = f"Total 30d: {fmt_pt(int(exp_total_30))} XP"
+                    elif rows and _xp_stats.summarize_xp(rows).get("ok"):
+                        _sum = _xp_stats.summarize_xp(rows)
+                        _lines = _xp_stats.summary_lines(_sum)
+                        _lines.append(f"Atualizado às {datetime.now().strftime('%H:%M')}")
+                        home.ids.char_xp_total.text = "\n".join(_lines)
                         home.ids.char_xp_total.theme_text_color = "Primary"
                     elif not loading_gs:
                         home.ids.char_xp_total.text = "Histórico de XP indisponível. Toque no ícone ↗ para conferir."
@@ -856,37 +841,11 @@ class CharControllerMixin:
                         # Mostra sempre os últimos 7 dias (consecutivos). Se o GuildStats não listar um dia,
                         # exibimos 0 para ficar claro que não houve ganho/perda (ou que não foi trackeado).
                         try:
-                            # Determina a data mais recente do histórico.
-                            ref_dates = []
-                            for rr in rows:
-                                ds0 = str(rr.get("date") or "").strip()
-                                if not ds0:
-                                    continue
-                                try:
-                                    ref_dates.append(datetime.fromisoformat(ds0).date())
-                                except Exception:
-                                    continue
-                            ref = max(ref_dates) if ref_dates else datetime.utcnow().date()
-
-                            day_map = {}
-                            for rr in rows:
-                                ds0 = str(rr.get("date") or "").strip()
-                                if not ds0:
-                                    continue
-                                try:
-                                    ev_i = int(rr.get("exp_change_int") or 0)
-                                except Exception:
-                                    continue
-                                # Se houver duplicata por data, soma (mais seguro).
-                                day_map[ds0] = int(day_map.get(ds0, 0)) + int(ev_i)
-
-                            for i in range(0, 7):
-                                d = ref - timedelta(days=i)
-                                ds = d.isoformat()
-                                ev_i = int(day_map.get(ds, 0))
+                            # Últimos 7 dias consecutivos; dia sem registro aparece como 0.
+                            for d, ev_i in _xp_stats.summarize_xp(rows)["daily_7"]:
                                 sec = f"{fmt_pt(ev_i)} XP"
-                                icon = "trending-up" if ev_i >= 0 else "trending-down"
-                                item = TwoLineIconListItem(text=ds, secondary_text=sec)
+                                icon = "trending-up" if ev_i > 0 else ("trending-down" if ev_i < 0 else "minus")
+                                item = TwoLineIconListItem(text=d.strftime("%d/%m/%Y"), secondary_text=sec)
                                 item.add_widget(IconLeftWidget(icon=icon))
                                 xlist.add_widget(item)
                         except Exception:
@@ -910,7 +869,18 @@ class CharControllerMixin:
             dlist.clear_widgets()
 
             deaths_list = [d for d in deaths if isinstance(d, dict)] if isinstance(deaths, list) else []
-            for d in deaths_list[:6]:
+            try:
+                _ds = _xp_stats.summarize_deaths(deaths_list)
+                if _ds["count"]:
+                    _txt = f"{_ds['count']} morte(s) recente(s)"
+                    if _ds["xp_lost"]:
+                        _txt += f" • XP perdida: {_xp_stats.fmt_compact(_ds['xp_lost'])}"
+                    _hdr = OneLineIconListItem(text=_txt)
+                    _hdr.add_widget(IconLeftWidget(icon="chart-bar"))
+                    dlist.add_widget(_hdr)
+            except Exception:
+                pass
+            for d in deaths_list[:10]:
                 time_s = str(d.get("time") or d.get("date") or "").strip()
                 lvl_s = str(d.get("level") or "").strip()
                 xp_s = str(d.get("exp_lost") or d.get("xp_lost") or "").strip()
@@ -1125,6 +1095,8 @@ class CharControllerMixin:
     
                 character_wrapper = data.get("character", {})
                 character = character_wrapper.get("character", character_wrapper) if isinstance(character_wrapper, dict) else {}
+                if not isinstance(character, dict) or not str(character.get("name") or "").strip():
+                    raise ValueError("Personagem não encontrado.")
     
                 url = f"https://www.tibia.com/community/?subtopic=characters&name={name.replace(' ', '+')}"
                 title = str(character.get("name") or name)
@@ -1575,7 +1547,8 @@ class CharControllerMixin:
                     Clock.schedule_once(lambda *_: done_stage2(payload, url), 0)
     
             except Exception as e:
-                Clock.schedule_once(lambda *_: done_stage1(False, f"Erro: {e}", ""), 0)
+                msg = _friendly_char_error(e)
+                Clock.schedule_once(lambda *_, msg=msg: done_stage1(False, msg, ""), 0)
     
         threading.Thread(target=worker, daemon=True).start()
     def open_last_in_browser(self):
