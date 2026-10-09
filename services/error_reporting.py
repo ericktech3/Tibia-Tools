@@ -59,7 +59,14 @@ def get_writable_dir() -> str:
     for candidate in (_try_android_app_storage(), _try_running_app_data_dir()):
         if candidate:
             return candidate
-    return os.getcwd()
+    # Nunca grava na pasta do projeto (evita log versionado sem querer).
+    import tempfile
+    d = os.path.join(tempfile.gettempdir(), "tibia_tools")
+    try:
+        os.makedirs(d, exist_ok=True)
+        return d
+    except OSError:
+        return tempfile.gettempdir()
 
 
 def get_crash_file_path(filename: str = CRASH_FILE_NAME) -> str:
@@ -67,15 +74,72 @@ def get_crash_file_path(filename: str = CRASH_FILE_NAME) -> str:
 
 
 MAX_LOG_BYTES = 512 * 1024  # acima disso o log antigo vira .old (não cresce para sempre)
+MAX_OLD_AGE = 14 * 24 * 3600  # o .old é apagado depois de 14 dias
+
+# ---- Política de privacidade do log ----------------------------------------
+# O log é só local. Ele nunca é enviado para lugar nenhum automaticamente;
+# o usuário pode compartilhá-lo manualmente pelas Configurações.
+# Antes de gravar, removemos: parâmetros de URL (nomes pesquisados), nomes em
+# caminhos de personagem e o nome da pasta do usuário no computador.
+import re as _re
+
+_RE_QUERY = _re.compile(r"(https?://[^\s?#'\"]+)\?[^\s'\"]*")
+_RE_CHAR_PATH = _re.compile(
+    r"(/(?:characters?|character|guilds?|guild|highscores|nick)/)([^/\s?'\"]+)", _re.I)
+_RE_NAME_PARAM = _re.compile(r"\b(nick|name|character|char|player)=([^&\s'\"]+)", _re.I)
+_RE_HOME = _re.compile(r"(/home/|/Users/|C:\\\\Users\\\\)([^/\\\\\s]+)", _re.I)
+
+
+def redact(text: str) -> str:
+    """Remove dados pessoais/pesquisados de um texto de log."""
+    if not text:
+        return text
+    try:
+        out = _RE_QUERY.sub(r"\1?<…>", text)
+        out = _RE_NAME_PARAM.sub(r"\1=<…>", out)
+        out = _RE_CHAR_PATH.sub(r"\1<…>", out)
+        out = _RE_HOME.sub(r"\1<user>", out)
+        return out
+    except Exception:
+        return text
+
+
+def _old_file(crash_file: Path) -> Path:
+    return crash_file.with_suffix(crash_file.suffix + ".old")
 
 
 def _rotate_if_needed(crash_file: Path) -> None:
     try:
+        old = _old_file(crash_file)
+        if old.exists() and (__import__("time").time() - old.stat().st_mtime) > MAX_OLD_AGE:
+            old.unlink()
         if crash_file.exists() and crash_file.stat().st_size > MAX_LOG_BYTES:
-            old = crash_file.with_suffix(crash_file.suffix + ".old")
             os.replace(crash_file, old)
     except OSError:
         pass
+
+
+def read_crash_log(max_chars: int = 60_000, filename: str = CRASH_FILE_NAME) -> str:
+    """Texto do log (já sem dados pessoais) para o usuário compartilhar."""
+    parts = []
+    base = Path(get_crash_file_path(filename))
+    for f in (_old_file(base), base):
+        try:
+            if f.exists():
+                parts.append(f.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            pass
+    text = redact("".join(parts))
+    return text[-max_chars:] if len(text) > max_chars else text
+
+
+def delete_crash_log(filename: str = CRASH_FILE_NAME) -> None:
+    base = Path(get_crash_file_path(filename))
+    for f in (base, _old_file(base)):
+        try:
+            f.unlink()
+        except OSError:
+            pass
 
 
 def write_crash_log(text: str, *, filename: str = CRASH_FILE_NAME) -> None:
@@ -87,6 +151,7 @@ def write_crash_log(text: str, *, filename: str = CRASH_FILE_NAME) -> None:
         crash_file.parent.mkdir(parents=True, exist_ok=True)
         _rotate_if_needed(crash_file)
         stamp = _time.strftime("%Y-%m-%d %H:%M:%S")
+        text = redact(text)
         payload = text if text.endswith("\n") else f"{text}\n"
         with crash_file.open("a", encoding="utf-8") as handle:
             handle.write(f"[{stamp}] {payload}")
