@@ -1,0 +1,60 @@
+name: Teste no emulador Android (APK publicado)
+
+# Roda só quando você manda (Actions > este workflow > Run workflow).
+# Baixa o APK da release escolhida, instala em emuladores Android 10, 13 e 14,
+# abre o app e confere se ele continua aberto e sem erro Python no log.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag da release (vazio = última)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [29, 33, 34]
+    steps:
+      - name: Habilitar aceleração do emulador
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+
+      - name: Baixar APK da release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          mkdir apk
+          if [ -n "$TAG" ]; then
+            gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*.apk' -D apk
+          else
+            gh release download -R "$GITHUB_REPOSITORY" -p '*.apk' -D apk
+          fi
+          ls -lh apk
+
+      - name: Instalar, abrir e verificar
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            set -e; APK=$(ls apk/*.apk | head -1); PKG=org.erick.tibiatools; adb logcat -c; adb install -r "$APK"; adb shell monkey -p $PKG -c android.intent.category.LAUNCHER 1; sleep 40; adb shell pidof $PKG || (echo "APP FECHOU"; adb logcat -d | tail -300; exit 1); adb logcat -d > logcat.txt; if grep -q "Traceback" logcat.txt; then grep -A30 Traceback logcat.txt; exit 1; fi; echo "OK: app aberto e sem erro Python"
+
+      - name: Guardar log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logcat-api-${{ matrix.api-level }}
+          path: logcat.txt
+          if-no-files-found: ignore
