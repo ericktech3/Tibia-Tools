@@ -256,6 +256,8 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         # Android 15+ desenha o app sob a barra de status: detecta a altura dela
         # para o StatusBarSpacer (KV) afastar o conteúdo do topo.
         self._detect_status_bar_height()
+        # Insets podem ainda não estar prontos antes da primeira tela.
+        Clock.schedule_once(lambda *_: self._detect_status_bar_height(), 0.5)
 
         # Se algum import do core falhar no Android, mostre na tela em vez de fechar.
         if _CORE_IMPORT_ERROR is not None:
@@ -307,6 +309,16 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         self._bind_android_back()
         return root
 
+    def center_top_app_bar(self, toolbar):
+        """KivyMD 1.2 aplica padding negativo na barra M2 (56dp)."""
+        def align(*_):
+            actions = toolbar.ids.get("left_actions")
+            if actions is not None and actions.parent is not None:
+                actions.parent.padding = [0, 0, 0, 0]
+        # A biblioteca calcula sua altura depois de on_kv_post.
+        toolbar.bind(height=lambda *_: Clock.schedule_once(align, 0))
+        Clock.schedule_once(align, 0)
+
     def _detect_status_bar_height(self):
         """Calcula a altura da barra de status (dp) no Android; 0 nas demais plataformas."""
         try:
@@ -320,7 +332,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             try:
                 insets = activity.getWindow().getDecorView().getRootWindowInsets()
                 if insets is not None:
-                    WindowInsetsType = autoclass("android.view.WindowInsetsType")
+                    WindowInsetsType = autoclass("android.view.WindowInsets$Type")
                     top = int(insets.getInsets(WindowInsetsType.statusBars()).top)
             except Exception:
                 top = 0
@@ -330,7 +342,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
                 if rid > 0:
                     top = int(res.getDimensionPixelSize(rid))
             if top > 0:
-                self.status_bar_height_dp = max(0.0, float(top) / density)
+                self.status_bar_height_dp = dp(max(0.0, float(top) / density))
         except Exception:
             pass
 
@@ -1745,7 +1757,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         return True
 
     def bosses_toggle_fav_only(self):
-        cur = bool(self._prefs_get("boss_fav_only", False))
+        cur = _boss_logic.favorites_only_enabled(self._prefs_get("boss_fav_only", False))
         cur = not cur
         self._prefs_set("boss_fav_only", cur)
         try:
@@ -1898,21 +1910,35 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
 
         bf = str(self._prefs_get("boss_filter", "All") or "All")
         bs = str(self._prefs_get("boss_sort", "Chance") or "Chance")
-        fav_only = bool(self._prefs_get("boss_fav_only", False))
+        fav_only = _boss_logic.favorites_only_enabled(self._prefs_get("boss_fav_only", False))
         favs = self._prefs_get("boss_favorites", []) or []
         if not isinstance(favs, list):
             favs = []
+
+        if fav_only and not favs:
+            # Evita uma lista vazia permanente por uma preferência antiga.
+            fav_only = False
+            self._prefs_set("boss_fav_only", False)
 
         filtered = _boss_logic.filter_and_sort(
             bosses, query=q, chance_filter=bf, sort=bs, favorites=favs, fav_only=fav_only,
         )
 
+        # Sincroniza o estado visível também ao receber dados do cache.
+        if "boss_fav_toggle" in scr.ids:
+            scr.ids.boss_fav_toggle.icon = "star" if fav_only else "star-outline"
+        if "boss_filter_label" in scr.ids:
+            scr.ids.boss_filter_label.text = bf + (" • Só favoritos" if fav_only else "")
+        if "boss_sort_label" in scr.ids:
+            scr.ids.boss_sort_label.text = bs
         scr.ids.boss_list.clear_widgets()
         scr.ids.boss_status.text = f"Bosses: {len(filtered)} (de {len(bosses)})"
 
         if not filtered:
-            item = OneLineIconListItem(text="Nada encontrado com esses filtros.")
-            item.add_widget(IconLeftWidget(icon="magnify"))
+            message = ("Nenhum favorito neste mundo. Toque na estrela para ver todos."
+                       if fav_only else "Nada encontrado com esses filtros.")
+            item = self._build_wrapped_info_row(message, icon="magnify")
+            item.bind(on_release=lambda *_: self.bosses_toggle_fav_only() if fav_only else None)
             scr.ids.boss_list.add_widget(item)
             return
 
@@ -2243,7 +2269,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
             if "boss_sort_label" in scr.ids:
                 scr.ids.boss_sort_label.text = str(self._prefs_get("boss_sort", "Chance") or "Chance")
             if "boss_fav_toggle" in scr.ids:
-                scr.ids.boss_fav_toggle.icon = "star" if bool(self._prefs_get("boss_fav_only", False)) else "star-outline"
+                scr.ids.boss_fav_toggle.icon = "star" if _boss_logic.favorites_only_enabled(self._prefs_get("boss_fav_only", False)) else "star-outline"
         except Exception:
             pass
 
