@@ -185,5 +185,16 @@ class BackNavigationEventsTests(unittest.TestCase):
         self.assertEqual(app.toast_messages, [])
 
 
+    def test_system_back_callback_navigates_and_only_backgrounds_on_second_press(self):
+        app = self.make_app()
+        calls = []
+        app._send_app_to_background = lambda: calls.append("bg")
+        app._on_android_back_invoked()
+        self.assertEqual(calls, [])
+        app._last_back_event_ts = 0.0
+        app._on_android_back_invoked()
+        self.assertEqual(calls, ["bg"])
+
+
 if __name__ == "__main__":
     unittest.main()

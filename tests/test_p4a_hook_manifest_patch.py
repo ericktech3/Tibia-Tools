@@ -54,5 +54,23 @@ class P4aHookManifestPatchTests(unittest.TestCase):
         self.assertEqual(patched.count('android.permission.FOREGROUND_SERVICE_DATA_SYNC'), 1)
 
 
+    def test_disables_predictive_back_on_application_and_activity(self):
+        manifest = '''<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="Tibia Tools">
+        <activity android:name="org.kivy.android.PythonActivity" android:exported="true">
+        </activity>
+    </application>
+</manifest>
+'''
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mp = Path(tmpdir) / 'AndroidManifest.xml'
+            mp.write_text(manifest, encoding='utf-8')
+            hook._patch_manifest_file(mp)
+            hook._patch_manifest_file(mp)
+            patched = mp.read_text(encoding='utf-8')
+        self.assertEqual(patched.count('android:enableOnBackInvokedCallback="false"'), 2)
+        self.assertIn('<application android:enableOnBackInvokedCallback="false" android:label', patched)
+
+
 if __name__ == '__main__':
     unittest.main()
