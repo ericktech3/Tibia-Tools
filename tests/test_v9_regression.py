@@ -39,10 +39,12 @@ class FakeWidget:
 class V9Tests(unittest.TestCase):
     def setUp(self):
         import main
-        for name in ("TwoLineIconListItem", "IconLeftWidget", "OneLineIconListItem"):
-            p = patch.object(main, name, FakeWidget, create=True)
-            p.start()
-            self.addCleanup(p.stop)
+        import features.bosses.controller as bosses_ctrl
+        for mod in (main, bosses_ctrl):
+            for name in ("TwoLineIconListItem", "IconLeftWidget", "OneLineIconListItem"):
+                p = patch.object(mod, name, FakeWidget, create=True)
+                p.start()
+                self.addCleanup(p.stop)
 
     def test_boolean_preferences(self):
         for value in (False, "false", "False", "0", "off", None, 0):
@@ -100,7 +102,7 @@ class V9Tests(unittest.TestCase):
         container = SimpleNamespace(padding=[0, 0, 0, -12])
         bar = SimpleNamespace(ids={"left_actions": SimpleNamespace(parent=container)},
                               bind=lambda **kwargs: None)
-        with patch("main.Clock.schedule_once", side_effect=lambda fn, delay=0: fn()):
+        with patch("features.bosses.controller.Clock.schedule_once", side_effect=lambda fn, delay=0: fn()), patch("main.Clock.schedule_once", side_effect=lambda fn, delay=0: fn()):
             app.center_top_app_bar(bar)
         self.assertEqual(container.padding, [0, 0, 0, 0])
 
