@@ -656,20 +656,22 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         return bool(self._handle_back_navigation())
 
     def _on_window_keyboard(self, _window, key, scancode=None, *_args):
+        if not self._is_android_back_key(key, scancode):
+            return False
         try:
-            if not self._is_android_back_key(key, scancode):
-                return False
             return self._dispatch_android_back()
         except Exception:
-            return False
+            log_current_exception()
+            return True  # nunca fecha o app por erro na navegacao
 
     def _on_window_key_down(self, _window, key, scancode=None, *_args):
+        if not self._is_android_back_key(key, scancode):
+            return False
         try:
-            if not self._is_android_back_key(key, scancode):
-                return False
             return self._dispatch_android_back()
         except Exception:
-            return False
+            log_current_exception()
+            return True  # nunca fecha o app por erro na navegacao
 
     def _on_window_key_up(self, _window, key, scancode=None, *_args):
         try:
@@ -683,7 +685,8 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
         try:
             return self._dispatch_android_back()
         except Exception:
-            return False
+            log_current_exception()
+            return True
 
     # --------------------
     # Deep-link / Notification click handling (Android)
@@ -2002,7 +2005,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
                 worlds = worker()
                 Clock.schedule_once(lambda *_: done(worlds), 0)
             except Exception as e:
-                Clock.schedule_once(lambda *_: setattr(scr.ids.boss_status, "text", f"Erro: {e}"), 0)
+                Clock.schedule_once(lambda *_, e=e: setattr(scr.ids.boss_status, "text", f"Erro: {e}"), 0)
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -2799,7 +2802,7 @@ class TibiaToolsApp(CharControllerMixin, FavoritesControllerMixin, SettingsContr
                     setattr(dlg, "_last_text", text)
                 Clock.schedule_once(_set_text, 0)
             except Exception as e:
-                Clock.schedule_once(lambda *_: setattr(dlg, "text", f"Erro: {e}"), 0)
+                Clock.schedule_once(lambda *_, e=e: setattr(dlg, "text", f"Erro: {e}"), 0)
 
         threading.Thread(target=run, daemon=True).start()
 
