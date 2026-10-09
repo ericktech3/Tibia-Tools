@@ -37,8 +37,14 @@ def _candidate_manifest_paths(toolchain) -> list[Path]:
     """Return a short list of likely manifest locations."""
     candidates: list[Path] = []
 
+    # O hook roda de dentro da pasta da distribuicao: este e o manifesto real.
+    candidates.append(Path("src/main/AndroidManifest.xml"))
+
     # Most common: toolchain._dist.dist_dir points to the dist folder.
-    dist_dir = getattr(getattr(toolchain, "_dist", None), "dist_dir", None)
+    try:
+        dist_dir = getattr(getattr(toolchain, "_dist", None), "dist_dir", None)
+    except Exception:
+        dist_dir = None
     if dist_dir:
         d = Path(dist_dir)
         candidates.append(d / "src/main/AndroidManifest.xml")
@@ -87,6 +93,21 @@ def _patch_manifest_file(manifest_path: Path) -> bool:
             text = text[:app_idx] + perm + "\n" + text[app_idx:]
             changed = True
 
+    # Android 16 (targetSdk 36) ativa o "predictive back" por padrao: o gesto/botao
+    # voltar fecha a Activity sem enviar KEYCODE_BACK ao Kivy. Desativamos para
+    # que o app receba o voltar e navegue para a aba anterior.
+    # Aplica tanto no <application> quanto na Activity principal.
+    def _add_back_flag(m):
+        nonlocal changed
+        tag = m.group(0)
+        if 'enableOnBackInvokedCallback' in tag:
+            return tag
+        changed = True
+        name = m.group(1)
+        return f'<{name} android:enableOnBackInvokedCallback="false"' + tag[len(name) + 1:]
+    text = re.sub(r'<(application)\b[^>]*>', _add_back_flag, text, count=1)
+    text = re.sub(r'<(activity)\b[^>]*PythonActivity[^>]*>', _add_back_flag, text, count=1)
+
     # Ensure BootReceiver exists.
     if 'org.erick.tibiatools.BootReceiver' not in text:
         close_tag = '</application>'
@@ -118,11 +139,14 @@ def _patch_manifest_file(manifest_path: Path) -> bool:
 
 
 def _ensure_receiver(toolchain) -> None:
-    for mf in _candidate_manifest_paths(toolchain):
+    try:
+        paths = _candidate_manifest_paths(toolchain)
+    except Exception:
+        paths = [Path("src/main/AndroidManifest.xml")]
+    for mf in paths:
         try:
             if _patch_manifest_file(mf):
-                # Patched successfully; stop.
-                return
+                print(f"[tibia-tools hook] AndroidManifest atualizado: {mf}")
         except Exception:
             # Ignore and try next candidate.
             continue
@@ -140,5 +164,10 @@ def before_apk_package(toolchain):  # noqa: N802
 
 
 def after_apk_build(toolchain):  # noqa: N802
-    # As a fallback, try again; useful if the hook ordering differs.
+    # O manifesto e gerado de novo durante o build: aplica depois dele.
+    _ensure_receiver(toolchain)
+
+
+def before_apk_assemble(toolchain):  # noqa: N802
+    # Ultima chance antes do Gradle empacotar o APK.
     _ensure_receiver(toolchain)
