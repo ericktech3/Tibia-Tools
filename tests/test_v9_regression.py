@@ -24,7 +24,26 @@ class List:
         self.children.append(item)
 
 
+class FakeWidget:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+        self.children = []
+
+    def add_widget(self, widget):
+        self.children.append(widget)
+
+    def bind(self, **kwargs):
+        pass
+
+
 class V9Tests(unittest.TestCase):
+    def setUp(self):
+        import main
+        for name in ("TwoLineIconListItem", "IconLeftWidget", "OneLineIconListItem"):
+            p = patch.object(main, name, FakeWidget, create=True)
+            p.start()
+            self.addCleanup(p.stop)
+
     def test_boolean_preferences(self):
         for value in (False, "false", "False", "0", "off", None, 0):
             self.assertFalse(favorites_only_enabled(value))
