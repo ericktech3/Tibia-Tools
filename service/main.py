@@ -271,9 +271,32 @@ def main():
     except Exception:
         pass
 
+    try:
+        from core import fgs_budget  # limite de 6 h/24 h do Android 15+
+    except Exception:
+        fgs_budget = None
+    span_start = time.time()
+
     while True:
         try:
             data_dir = state_mod.default_data_dir_android()
+            if fgs_budget is not None:
+                now_t = time.time()
+                fgs_budget.record(data_dir, span_start, now_t)
+                span_start = now_t
+                if fgs_budget.exhausted(data_dir):
+                    horas = max(1, round(fgs_budget.seconds_until_available(data_dir) / 3600))
+                    try:
+                        _android_start_foreground(
+                            "Tibia Tools",
+                            f"Monitor pausado (limite do Android). Abra o app para retomar ou aguarde ~{horas}h.",
+                            notif_id=1001,
+                        )
+                    except Exception:
+                        pass
+                    _append_crash_log("monitor pausado: limite de 6h/24h do Android atingido")
+                    _android_stop_self()
+                    return
             st = state_mod.load_state(data_dir)
 
             favorites = st.get("favorites", [])
