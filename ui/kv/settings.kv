@@ -211,6 +211,20 @@
                                 text: "Limpar cache"
                                 on_release: app.settings_clear_cache()
 
+                        SectionTitle:
+                            text: "Log de erros (fica só no aparelho)"
+
+                        ActionRow:
+                            MDRectangleFlatIconButton:
+                                icon: "share-variant"
+                                text: "Compartilhar"
+                                on_release: app.settings_share_log()
+
+                            MDRectangleFlatIconButton:
+                                icon: "delete-outline"
+                                text: "Apagar"
+                                on_release: app.settings_delete_log()
+
                         HintText:
                             id: set_status
                             text: ""
