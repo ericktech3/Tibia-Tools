@@ -1,7 +1,7 @@
 name: Teste no emulador Android (APK publicado)
 
 # Roda só quando você manda (Actions > este workflow > Run workflow).
-# Baixa o APK da release escolhida, instala em emuladores Android 10, 13 e 14,
+# Baixa o APK da release escolhida, instala em emuladores Android 10, 14, 16 e 17,
 # abre o app e confere se ele continua aberto e sem erro Python no log.
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api-level: [29, 33, 34]
+        api-level: [29, 34, 36, 37]
     steps:
       - name: Habilitar aceleração do emulador
         run: |
@@ -49,7 +49,7 @@ jobs:
           target: google_apis
           disable-animations: true
           script: |
-            set -e; APK=$(ls apk/*.apk | head -1); PKG=org.erick.tibiatools; adb logcat -c; adb install -r "$APK"; adb shell monkey -p $PKG -c android.intent.category.LAUNCHER 1; sleep 40; adb shell pidof $PKG || (echo "APP FECHOU"; adb logcat -d | tail -300; exit 1); adb logcat -d > logcat.txt; if grep -q "Traceback" logcat.txt; then grep -A30 Traceback logcat.txt; exit 1; fi; echo "OK: app aberto e sem erro Python"
+            set -e; APK=$(ls apk/*.apk | head -1); PKG=org.erick.tibiatools; adb logcat -c; adb install -r "$APK"; adb shell monkey -p $PKG -c android.intent.category.LAUNCHER 1; sleep 40; adb shell pidof $PKG || (echo "APP FECHOU"; adb logcat -d | tail -300; exit 1); adb logcat -d > logcat.txt; python3 .github/scripts/check_logcat.py logcat.txt
 
       - name: Guardar log
         if: always()
