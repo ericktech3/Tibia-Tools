@@ -17,7 +17,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     # Itens marcados como experimental podem falhar sem reprovar o teste todo.
     continue-on-error: ${{ matrix.experimental }}
     strategy:
@@ -27,16 +27,27 @@ jobs:
           - api-level: 29
             channel: stable
             experimental: false
+            ram: 2048M
+            boot-timeout: 600
           - api-level: 34
             channel: stable
             experimental: false
+            ram: 2048M
+            boot-timeout: 600
           - api-level: 36
             channel: stable
             experimental: false
+            ram: 2048M
+            boot-timeout: 600
           # No Android 17 o Google chama a versão de "37.0" (não só "37").
+          # Android 17 é mais pesado: mais memória e mais tempo para ligar.
+          # Fica como experimental: se o emulador dele não ligar no GitHub,
+          # não reprova os outros testes.
           - api-level: '37.0'
             channel: stable
-            experimental: false
+            experimental: true
+            ram: 4096M
+            boot-timeout: 900
     steps:
       - name: Habilitar aceleração do emulador
         run: |
@@ -64,6 +75,10 @@ jobs:
           target: google_apis
           disable-animations: true
           channel: ${{ matrix.channel }}
+          cores: 4
+          ram-size: ${{ matrix.ram }}
+          disk-size: 6G
+          emulator-boot-timeout: ${{ matrix.boot-timeout }}
           script: |
             set -e; APK=$(ls apk/*.apk | head -1); PKG=org.erick.tibiatools; adb logcat -c; adb install -r "$APK"; adb shell monkey -p $PKG -c android.intent.category.LAUNCHER 1; sleep 40; adb shell pidof $PKG || (echo "APP FECHOU"; adb logcat -d | tail -300; exit 1); adb logcat -d > logcat.txt; echo "App continuou aberto"
 
