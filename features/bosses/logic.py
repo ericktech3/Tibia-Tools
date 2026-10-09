@@ -93,3 +93,10 @@ def secondary_text(b: dict) -> str:
     chance = str(b.get("chance") or "").strip()
     status = str(b.get("status") or "").strip()
     return " • ".join([x for x in [chance, status] if x]) or " "
+
+
+def favorites_only_enabled(value) -> bool:
+    """JSON antigo pode conter 'false' como texto; bool('false') seria True."""
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "on"}
+    return value is True or value == 1
