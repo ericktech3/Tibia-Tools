@@ -304,6 +304,13 @@ class AndroidBridgeService:
                 return False
 
         try:
+            # App aberto pelo usuário: o Android zera o limite de 6 h do dataSync.
+            from core import fgs_budget
+            from core.state import default_data_dir_android
+            fgs_budget.reset(default_data_dir_android())
+        except Exception:
+            pass
+        try:
             from jnius import autoclass  # type: ignore
             ServiceFavwatch = autoclass('org.erick.tibiatools.ServiceFavwatch')
             PythonActivity = autoclass('org.kivy.android.PythonActivity')
