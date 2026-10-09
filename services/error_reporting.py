@@ -87,7 +87,9 @@ _RE_QUERY = _re.compile(r"(https?://[^\s?#'\"]+)\?[^\s'\"]*")
 _RE_CHAR_PATH = _re.compile(
     r"(/(?:characters?|character|guilds?|guild|highscores|nick)/)([^/\s?'\"]+)", _re.I)
 _RE_NAME_PARAM = _re.compile(r"\b(nick|name|character|char|player)=([^&\s'\"]+)", _re.I)
-_RE_HOME = _re.compile(r"(/home/|/Users/|C:\\\\Users\\\\)([^/\\\\\s]+)", _re.I)
+# Pastas de usuário (Linux/macOS/Windows, com \ ou /). O nome pode ter espaços
+# no Windows, então vai até a próxima barra.
+_RE_HOME = _re.compile(r"(/home/|/Users/)([^/\\\s]+)|([A-Za-z]:[\\/]+Users[\\/]+)([^\\/\r\n]+)", _re.I)
 
 
 def redact(text: str) -> str:
@@ -98,7 +100,7 @@ def redact(text: str) -> str:
         out = _RE_QUERY.sub(r"\1?<…>", text)
         out = _RE_NAME_PARAM.sub(r"\1=<…>", out)
         out = _RE_CHAR_PATH.sub(r"\1<…>", out)
-        out = _RE_HOME.sub(r"\1<user>", out)
+        out = _RE_HOME.sub(lambda m: (m.group(1) or m.group(3)) + "<user>", out)
         return out
     except Exception:
         return text
