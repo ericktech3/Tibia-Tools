@@ -273,7 +273,7 @@ class CharControllerMixin:
         if not value:
             return None
         try:
-            return datetime.fromisoformat(str(value).strip())
+            return datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
         except ValueError:
             return None
 
