@@ -88,7 +88,7 @@ class _FakeSoup:
 
 
 class GuildStatsAndroidFallbackTests(unittest.TestCase):
-    @patch("integrations.tibiadata.BeautifulSoup", return_value=_FakeSoup())
+    @patch("integrations.parsers.guildstats_parser.BeautifulSoup", return_value=_FakeSoup())
     @patch("integrations.tibiadata._fetch_guildstats_exp_html", return_value="<html></html>")
     def test_light_only_falls_back_to_beautifulsoup_when_fast_path_fails(self, _mock_fetch_html, _mock_bs4):
         rows = fetch_guildstats_exp_changes("Elder Tree", light_only=True)
