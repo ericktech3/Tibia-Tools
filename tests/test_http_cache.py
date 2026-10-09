@@ -127,10 +127,11 @@ class HttpCacheTests(unittest.TestCase):
         self.assertEqual(self.sess.calls, 0)
 
     def test_install_and_uninstall(self):
+        before = requests.get
         hc.install()
-        self.assertIs(requests.get, hc.cached_get)
+        self.assertIs(requests.get, before, "install não pode trocar requests.get global")
         hc.uninstall()
-        self.assertIs(requests.get, hc._orig_get)
+        self.assertIs(requests.get, before)
 
 
 if __name__ == "__main__":

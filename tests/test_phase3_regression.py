@@ -66,24 +66,24 @@ class BossParserTests(unittest.TestCase):
 
 class BossFetchTests(unittest.TestCase):
     def test_success(self):
-        with mock.patch.object(exevopan.requests, "get", return_value=_resp(SAMPLE_HTML)):
+        with mock.patch.object(exevopan, "http_get", return_value=_resp(SAMPLE_HTML)):
             res = exevopan.fetch_exevopan_result("Antica")
         self.assertTrue(res.ok)
         self.assertEqual(len(res.data), 3)
 
     def test_offline_is_explained(self):
-        with mock.patch.object(exevopan.requests, "get", side_effect=requests.ConnectionError()):
+        with mock.patch.object(exevopan, "http_get", side_effect=requests.ConnectionError()):
             res = exevopan.fetch_exevopan_result("Antica")
             self.assertEqual(exevopan.fetch_exevopan_bosses("Antica"), [])  # compatível
         self.assertEqual(res.kind, R.OFFLINE)
 
     def test_site_down(self):
-        with mock.patch.object(exevopan.requests, "get", return_value=_resp("x", status=403)):
+        with mock.patch.object(exevopan, "http_get", return_value=_resp("x", status=403)):
             res = exevopan.fetch_exevopan_result("Antica")
         self.assertEqual(res.kind, R.SITE_ERROR)
 
     def test_page_without_bosses(self):
-        with mock.patch.object(exevopan.requests, "get", return_value=_resp("<html>nada</html>")):
+        with mock.patch.object(exevopan, "http_get", return_value=_resp("<html>nada</html>")):
             res = exevopan.fetch_exevopan_result("MundoInventado")
         self.assertEqual(res.kind, R.EMPTY)
 
@@ -145,11 +145,11 @@ class BoostedTests(unittest.TestCase):
     def test_fetch_success_and_offline(self):
         def fake(url, **kw):
             return _resp(json_data=self.C if "creatures" in url else self.B)
-        with mock.patch("core.boosted.requests.get", side_effect=fake):
+        with mock.patch("core.boosted.http_get", side_effect=fake):
             res = fetch_boosted_result()
         self.assertTrue(res.ok)
         self.assertEqual(res.data["boss"], "Ghazbaran")
-        with mock.patch("core.boosted.requests.get", side_effect=requests.ConnectionError()):
+        with mock.patch("core.boosted.http_get", side_effect=requests.ConnectionError()):
             res = fetch_boosted_result()
             self.assertEqual(res.kind, R.OFFLINE)
             self.assertIsNone(fetch_boosted())
