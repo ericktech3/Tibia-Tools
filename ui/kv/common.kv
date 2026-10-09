@@ -1,5 +1,9 @@
 #:import dp kivy.metrics.dp
 
+# Centraliza título e ações em toda a altura da barra M2 (KivyMD 1.2).
+<MDTopAppBar>:
+    on_kv_post: app.center_top_app_bar(self)
+
 # ---------- UI defaults (polish) ----------
 <MDCard>:
     radius: [dp(16), dp(16), dp(16), dp(16)]
