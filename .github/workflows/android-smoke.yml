@@ -18,8 +18,7 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    # Android 17 (API 37) ainda é muito novo: se a imagem dele não estiver
-    # disponível no GitHub, esse item falha sem marcar o teste todo como erro.
+    # Itens marcados como experimental podem falhar sem reprovar o teste todo.
     continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
@@ -34,9 +33,10 @@ jobs:
           - api-level: 36
             channel: stable
             experimental: false
-          - api-level: 37
-            channel: canary
-            experimental: true
+          # No Android 17 o Google chama a versão de "37.0" (não só "37").
+          - api-level: '37.0'
+            channel: stable
+            experimental: false
     steps:
       - name: Habilitar aceleração do emulador
         run: |
