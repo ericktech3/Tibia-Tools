@@ -50,6 +50,16 @@ TTL_BY_HOST = {
 DEFAULT_TTL = 120
 MAX_ENTRIES = 200
 MAX_DISK_AGE = 7 * 24 * 3600      # dados offline com mais de 7 dias são descartados
+MAX_DISK_BYTES = 20 * 1024 * 1024  # limite total do cache em disco (20 MB)
+MAX_DISK_FILES = 500               # limite de arquivos no cache em disco
+PRUNE_INTERVAL = 6 * 3600          # limpeza do disco no máximo a cada 6 h
+_last_prune = 0.0
+
+# Cabeçalhos que mudam o conteúdo da resposta e por isso fazem parte da chave.
+# Qualquer outro cabeçalho é ignorado na chave (não altera os sites públicos usados).
+KEY_HEADERS = ("User-Agent", "X-Requested-With", "Accept", "Accept-Language", "Referer")
+# Requisições com estes cabeçalhos/opções nunca são guardadas (dados de login/privados).
+PRIVATE_HEADERS = ("Authorization", "Cookie", "Proxy-Authorization")
 DISK_FORMAT = 1
 
 _lock = threading.Lock()
@@ -68,6 +78,7 @@ def configure_disk(directory: str):
         os.makedirs(directory, exist_ok=True)
         _disk_dir = directory
         _remove_legacy_pickle_files(directory)
+        prune_disk(force=True)
     except Exception:
         log.warning("cache em disco indisponível em %s", directory, exc_info=True)
         _disk_dir = None
@@ -84,6 +95,53 @@ def _remove_legacy_pickle_files(directory: str):
                     pass
     except OSError:
         pass
+
+
+def prune_disk(force: bool = False, now: float | None = None):
+    """Apaga arquivos velhos (> MAX_DISK_AGE) e, se passar do limite de tamanho
+    ou quantidade, os menos usados recentemente. Roda no máximo a cada
+    PRUNE_INTERVAL (não varre o disco em toda requisição)."""
+    global _last_prune
+    now = time.time() if now is None else now
+    if not _disk_dir or (not force and now - _last_prune < PRUNE_INTERVAL):
+        return
+    _last_prune = now
+    try:
+        entries = []
+        for name in os.listdir(_disk_dir):
+            if not name.endswith((".json", ".tmp")):
+                continue
+            p = os.path.join(_disk_dir, name)
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            if name.endswith(".tmp") or now - st.st_mtime > MAX_DISK_AGE:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+                continue
+            entries.append((max(st.st_mtime, st.st_atime), st.st_size, p))
+        entries.sort()  # mais antigos/menos usados primeiro
+        total = sum(e[1] for e in entries)
+        while entries and (total > MAX_DISK_BYTES or len(entries) > MAX_DISK_FILES):
+            _, size, p = entries.pop(0)
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+            total -= size
+    except OSError:
+        log.warning("falha ao limpar cache em disco", exc_info=True)
+
+
+def is_private_request(kwargs) -> bool:
+    """True se a requisição usa login/cookies/contexto que a chave não cobre."""
+    if kwargs.get("auth") is not None or kwargs.get("cookies"):
+        return True
+    headers = {str(k).lower() for k in (kwargs.get("headers") or {})}
+    return any(h.lower() in headers for h in PRIVATE_HEADERS)
 
 
 def is_cacheable_url(url) -> bool:
@@ -121,6 +179,7 @@ def _disk_save(k, r, saved_at: float):
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f)
         os.replace(tmp, p)  # gravação atômica: evita arquivo pela metade
+        prune_disk()
     except Exception:
         log.warning("falha ao salvar cache em disco", exc_info=True)
         try:
@@ -148,6 +207,10 @@ def _disk_load(k, url):
         resp.headers.update(d.get("headers") or {})
         resp.url = d.get("url") or url
         resp.encoding = d.get("encoding")
+        try:
+            os.utime(p, None)  # marca como usado recentemente (descarte por uso)
+        except OSError:
+            pass
         return saved_at, resp
     except Exception as e:
         log.info("descartando cache em disco inválido (%s)", e)
@@ -213,9 +276,10 @@ def _make_session() -> requests.Session:
 
 def _key(url, kwargs):
     params = kwargs.get("params")
-    headers = kwargs.get("headers") or {}
+    raw = kwargs.get("headers") or {}
+    headers = {str(a).lower(): str(b) for a, b in raw.items()}
     return (str(url), repr(sorted(params.items())) if isinstance(params, dict) else repr(params),
-            headers.get("User-Agent", ""), headers.get("X-Requested-With", ""))
+            ) + tuple(headers.get(h.lower(), "") for h in KEY_HEADERS)
 
 
 def clear(disk: bool = False):
@@ -245,7 +309,7 @@ def cached_get(url, params=None, **kwargs):
         # Site desconhecido: comportamento original do requests, sem cache.
         return _orig_get(url, **kwargs)
     session = _get_session()
-    if no_cache or kwargs.get("stream"):
+    if no_cache or kwargs.get("stream") or is_private_request(kwargs):
         return session.get(url, **kwargs)
     ttl = _ttl_for(url)
     k = _key(url, kwargs)
@@ -263,7 +327,10 @@ def cached_get(url, params=None, **kwargs):
         with _lock:
             hit = _cache.get(k)
         if hit:
-            return _tagged(hit[1], hit[0], "hit")
+            # Só é "hit" se a thread principal conseguiu atualizar (entrada dentro
+            # do TTL). Se ela falhou e sobrou dado vencido, marca como "stale".
+            kind = "hit" if time.time() - hit[0] < ttl else "stale"
+            return _tagged(hit[1], hit[0], kind)
         return session.get(url, **kwargs)
     try:
         try:
