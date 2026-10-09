@@ -40,7 +40,7 @@ source.exclude_dirs = tests,__pycache__,.git,.github,.pytest_cache
 source.exclude_patterns = *.bak,*.orig,*.pyc,*.pyo
 
 # (str) Application versioning (method 1)
-version = 1.5
+version = 1.2.1
 
 # (list) Application requirements
 # ✅ trava o KivyMD na versão compatível com MDBottomNavigation etc.
@@ -60,7 +60,8 @@ android.api = 36
 android.minapi = 24
 android.activity_attributes = android:windowSoftInputMode="adjustResize"
 android.ndk = 25b
-android.archs = arm64-v8a,armeabi-v7a
+# x86_64 incluido para o APK abrir nos emuladores do teste automatico (GitHub).
+android.archs = arm64-v8a,armeabi-v7a,x86_64
 android.release_artifact = apk
 
 # Fixa uma versão estável do python-for-android (p4a).
