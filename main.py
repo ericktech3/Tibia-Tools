@@ -86,6 +86,7 @@ except Exception:
 
 KV_FILE = "tibia_tools.kv"
 
+from core.app_info import APP_VERSION, LEGAL_NOTICE, get_app_version
 from services.infrastructure import InfrastructureMixin
 from services.persistence import PersistenceService
 from services.android_bridge import AndroidBridgeService
@@ -135,6 +136,8 @@ class TibiaToolsApp(
 ):
     # Altura da barra de status do Android (dp) — usada pelo StatusBarSpacer no KV
     status_bar_height_dp = NumericProperty(0)
+    app_version = StringProperty(APP_VERSION)
+    legal_notice = StringProperty(LEGAL_NOTICE)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -264,6 +267,7 @@ class TibiaToolsApp(
 
 
         self.title = "Tibia Tools"
+        self.app_version = get_app_version()
         self.theme_cls.primary_palette = "Blue"
         self.theme_cls.theme_style = "Dark"
 
@@ -1597,6 +1601,7 @@ class TibiaToolsApp(
         dialog = MDDialog(
             title=title,
             text=text,
+            radius=[dp(22)] * 4,
             buttons=[
                 MDFlatButton(text="OK", on_release=lambda *_: dialog.dismiss()),
             ],

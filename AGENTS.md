@@ -10,3 +10,6 @@
 - App integrations must call `core.http_client.get`, never patch or rely on a patched global `requests.get`. Why: global patching made cache behavior leak into unrelated code and hid intermittent bugs.
 - Everything written to the crash log passes through `services.error_reporting.redact`; logs stay on-device and are shared only by explicit user action. Why: privacy.
 - Each screen lives in `features/<screen>/controller.py` as a mixin composed into `TibiaToolsApp`; `main.py` keeps only startup, global navigation and composition. Why: keeps edits to one screen from breaking others.
+
+- App identity and legal copy live in core/app_info.py; Android displays PackageInfo.versionName and desktop reads buildozer.spec, with a tested fallback. Why: show the actual installed version without tying it to archive numbering.
+- Shared shape and spacing tokens live in ui/kv/common.kv; screen changes must regenerate the KV fallback. Why: keep pinned KivyMD controls and emergency layouts consistent.

@@ -6,8 +6,9 @@
 - [x] Melhorar o registro e o tratamento de exceções
 - [x] Adicionar testes de cache expirado, corrompido e offline
 
-## Fase 2 — Estabilidade Android (pendente: depende de aparelho real)
-- [ ] Testar serviço em segundo plano em aparelhos reais (Android 15/16)
+## Fase 2 — Estabilidade Android (em andamento: validado no aparelho do usuário)
+- [x] App abre e funciona sem erro nem fechamento em aparelho real: Galaxy S25+ (SM-S936B) com Android 17 / One UI 9.0
+- [ ] Testar serviço em segundo plano com o app fechado (favoritos: pausa em 5h30 e retomada ao abrir)
 - [ ] Verificar encerramento e retomada de workers
 - [ ] Testar rede indisponível e permissões
 - [ ] Medir bateria, memória e tempo de inicialização
@@ -50,3 +51,13 @@
 ## v17 — Personagem dividido
 - [x] features/char: controller (busca, 665 linhas) + display + stalker + history + _common.
 - [ ] Opcional: rodar o teste em emulador (Android 10/13/14) no GitHub.
+## v28 — Android 17 validado no aparelho
+- [x] APK testado no Galaxy S25+ (SM-S936B) com Android 17 / One UI 9.0: abriu e usou sem erro nem fechamento.
+- [x] Android 17 (API 37) mantido na matriz de testes do GitHub, como caso experimental (o emulador do GitHub ainda não inicia essa versão).
+- [ ] Confirmar no Android 17 o monitoramento com o app fechado (pausa em 5h30 e retomada ao abrir).
+
+## v29 — Aparência e informações
+- [x] Cartões, botões, campos e diálogos com cantos suaves; espaçamentos ajustados, temas existentes preservados.
+- [x] Versão instalada e aviso de independência da CipSoft em Configurações e Mais → Sobre.
+- [x] Validar testes (155 executados: 154 aprovados, 1 ignorado), sintaxe Python e consistência do KV; conferir cantos e aviso em janela de teste.
+- [ ] Confirmar aparência e toques no Galaxy S25+ após compilar.
