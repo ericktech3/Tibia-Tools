@@ -13,9 +13,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AppInfoTests(unittest.TestCase):
-    def test_fallback_matches_build_configuration(self):
+    def test_desktop_version_matches_build_configuration(self):
         spec = (ROOT / "buildozer.spec").read_text("utf-8")
-        self.assertEqual(APP_VERSION, re.search(r"(?m)^version\s*=\s*(\S+)", spec).group(1))
+        expected = re.search(r"(?m)^version\s*=\s*([^\s#]+)", spec).group(1)
+        with patch.dict(sys.modules, {"jnius": None}):
+            self.assertEqual(get_app_version(), expected)
 
     def test_android_shows_installed_version_not_archive_number(self):
         activity = SimpleNamespace(
@@ -25,10 +27,6 @@ class AppInfoTests(unittest.TestCase):
         jnius = SimpleNamespace(autoclass=lambda name: SimpleNamespace(mActivity=activity))
         with patch.dict(sys.modules, {"jnius": jnius}):
             self.assertEqual(get_app_version(), "9.8.7")
-
-    def test_desktop_reads_spec_when_android_is_unavailable(self):
-        with patch.dict(sys.modules, {"jnius": None}):
-            self.assertEqual(get_app_version(), APP_VERSION)
 
     def test_missing_spec_has_safe_fallback(self):
         with patch.dict(sys.modules, {"jnius": None}), patch.object(Path, "read_text", side_effect=OSError):
