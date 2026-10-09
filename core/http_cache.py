@@ -1,7 +1,7 @@
 """Cache HTTP + conexão reaproveitada + novas tentativas automáticas.
 
-Chame install() uma vez no início do app. A partir daí, chamadas
-requests.get para os sites conhecidos do app (TTL_BY_HOST) usam uma sessão
+As integrações usam core.http_client.get (cliente explícito). Para os sites
+conhecidos do app (TTL_BY_HOST) a busca usa uma sessão
 compartilhada, com retry em falhas temporárias, cache em memória e cache em
 disco (fallback offline). Qualquer outro site passa direto para o
 requests.get original, sem cache e sem alteração de comportamento.
@@ -318,20 +318,24 @@ def cached_get(url, params=None, **kwargs):
         hit = _cache.get(k)
         if hit and now - hit[0] < ttl:
             return _tagged(hit[1], hit[0], "hit")
-        ev = _inflight.get(k)
-        owner = ev is None
+        job = _inflight.get(k)
+        owner = job is None
         if owner:
-            ev = _inflight[k] = threading.Event()
-    if not owner:  # outra thread já está buscando a mesma URL: espera
-        ev.wait(timeout=(kwargs.get("timeout") or 20) + 5)
-        with _lock:
-            hit = _cache.get(k)
-        if hit:
-            # Só é "hit" se a thread principal conseguiu atualizar (entrada dentro
-            # do TTL). Se ela falhou e sobrou dado vencido, marca como "stale".
-            kind = "hit" if time.time() - hit[0] < ttl else "stale"
-            return _tagged(hit[1], hit[0], kind)
-        return session.get(url, **kwargs)
+            job = _inflight[k] = {"ev": threading.Event(), "result": None, "error": None}
+    if not owner:
+        # Outra thread já está buscando a mesma URL: espera e recebe EXATAMENTE
+        # o mesmo desfecho (sucesso, dado antigo ou erro). Nunca refaz a busca.
+        if not job["ev"].wait(timeout=(kwargs.get("timeout") or 20) + 5):
+            stale = _stale_response(k, url)
+            if stale is not None:
+                return stale
+            raise requests.Timeout(f"tempo esgotado esperando busca em andamento: {url}")
+        if job["error"] is not None:
+            raise job["error"]
+        res = job["result"]
+        if res is None:
+            raise requests.ConnectionError(f"busca concorrente sem resultado: {url}")
+        return _tagged(res, time.time() - response_age_seconds(res), res.headers.get("X-TT-Cache") or "hit")
     try:
         try:
             r = session.get(url, **kwargs)
@@ -339,8 +343,10 @@ def cached_get(url, params=None, **kwargs):
             # Sem internet (ou site fora): devolve a última resposta salva, se houver
             stale = _stale_response(k, url)
             if stale is not None:
-                log.info("offline/erro de rede em %s; usando cache (%s)", url, type(e).__name__)
+                log.info("offline/erro de rede em %s; usando cache (%s)", _safe_url(url), type(e).__name__)
+                job["result"] = stale
                 return stale
+            job["error"] = e
             raise
         if r.status_code == 200:
             _ = r.content  # garante corpo carregado
@@ -355,13 +361,24 @@ def cached_get(url, params=None, **kwargs):
             # Erro no site (403/500...): prefere dado antigo a tela vazia
             stale = _stale_response(k, url)
             if stale is not None:
-                log.info("HTTP %s em %s; usando cache", r.status_code, url)
+                log.info("HTTP %s em %s; usando cache", r.status_code, _safe_url(url))
+                job["result"] = stale
                 return stale
+        job["result"] = r
         return r
     finally:
         with _lock:
             _inflight.pop(k, None)
-        ev.set()
+        job["ev"].set()
+
+
+def _safe_url(url) -> str:
+    """URL sem parâmetros (podem conter nomes pesquisados) para o log."""
+    try:
+        from services.error_reporting import redact
+        return redact(str(url))
+    except Exception:
+        return str(url).split("?", 1)[0]
 
 
 def install():
@@ -369,13 +386,13 @@ def install():
     global _installed
     if _installed:
         return
+    # Não substitui mais requests.get globalmente: só prepara a sessão.
+    # As integrações usam core.http_client.get explicitamente.
     _get_session()
-    requests.get = cached_get
     _installed = True
 
 
 def uninstall():
-    """Restaura o requests.get original (usado nos testes)."""
+    """Compatibilidade: install() não altera mais o requests global."""
     global _installed
-    requests.get = _orig_get
     _installed = False

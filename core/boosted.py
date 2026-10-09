@@ -2,6 +2,8 @@ import os
 import hashlib
 import requests
 
+from core.http_client import get as http_get
+
 
 def _cache_sprite(url: str, cache_dir: str, prefix: str) -> str:
     """Baixa um sprite remoto e salva localmente.
@@ -36,7 +38,7 @@ def _cache_sprite(url: str, cache_dir: str, prefix: str) -> str:
 
     # baixa
     try:
-        r = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        r = http_get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
         r.raise_for_status()
         with open(raw_path, "wb") as f:
             f.write(r.content)
@@ -104,8 +106,8 @@ def fetch_boosted_result():
     from core.result import Result, response_meta, run_safely
 
     def _run():
-        rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
-        rb = requests.get("https://api.tibiadata.com/v4/boostablebosses", timeout=10)
+        rc = http_get("https://api.tibiadata.com/v4/creatures", timeout=10)
+        rb = http_get("https://api.tibiadata.com/v4/boostablebosses", timeout=10)
         rc.raise_for_status()
         rb.raise_for_status()
         info = parse_boosted(rc.json(), rb.json())
