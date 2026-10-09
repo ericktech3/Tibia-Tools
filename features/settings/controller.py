@@ -152,8 +152,9 @@ class SettingsControllerMixin:
                     0,
                 )
             except GithubReleaseLookupError as exc:
+                msg = str(exc)
                 Clock.schedule_once(
-                    lambda *_: setattr(scr.ids.set_status, "text", str(exc)),
+                    lambda *_, msg=msg: setattr(scr.ids.set_status, "text", msg),
                     0,
                 )
             except Exception:
