@@ -1,0 +1,294 @@
+[2026-10-09 09:44:32] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v7/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v7/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 09:44:32] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v7/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v7/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+  File "/tmp/v7/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v7/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 09:44:32] WARNING tibia_tools.result: falha em boom: x
+Traceback (most recent call last):
+  File "/tmp/v7/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v7/Tibia-Tools-main/tests/test_phase3_regression.py", line 43, in boom
+    raise requests.ConnectionError("x")
+requests.exceptions.ConnectionError: x
+[2026-10-09 09:44:45] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v7/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v7/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 09:44:45] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v7/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v7/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+  File "/tmp/v7/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v7/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 09:44:45] WARNING tibia_tools.result: falha em boom: x
+Traceback (most recent call last):
+  File "/tmp/v7/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v7/Tibia-Tools-main/tests/test_phase3_regression.py", line 43, in boom
+    raise requests.ConnectionError("x")
+requests.exceptions.ConnectionError: x
+[2026-10-09 10:18:36] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 10:18:36] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 10:18:36] WARNING tibia_tools.result: falha em boom: x
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/tests/test_phase3_regression.py", line 43, in boom
+    raise requests.ConnectionError("x")
+requests.exceptions.ConnectionError: x
+[2026-10-09 10:18:49] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 10:18:49] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 10:18:49] WARNING tibia_tools.result: falha em boom: x
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/tests/test_phase3_regression.py", line 43, in boom
+    raise requests.ConnectionError("x")
+requests.exceptions.ConnectionError: x
+[2026-10-09 10:21:00] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 10:21:00] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 10:21:00] WARNING tibia_tools.result: falha em boom: x
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/tests/test_phase3_regression.py", line 43, in boom
+    raise requests.ConnectionError("x")
+requests.exceptions.ConnectionError: x
+[2026-10-09 10:21:26] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 10:21:26] WARNING tibia_tools.result: falha em _run: 
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/core/boosted.py", line 107, in _run
+    rc = requests.get("https://api.tibiadata.com/v4/creatures", timeout=10)
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/nix/store/44rn0p64x92bnnh7cwn6x6ybvflybmvz-python3-3.13.12/lib/python3.13/unittest/mock.py", line 1228, in _execute_mock_call
+    raise effect
+requests.exceptions.ConnectionError
+[2026-10-09 10:21:26] WARNING tibia_tools.result: falha em boom: x
+Traceback (most recent call last):
+  File "/tmp/v8/Tibia-Tools-main/core/result.py", line 109, in run_safely
+    value = fn()
+  File "/tmp/v8/Tibia-Tools-main/tests/test_phase3_regression.py", line 43, in boom
+    raise requests.ConnectionError("x")
+requests.exceptions.ConnectionError: x
