@@ -152,11 +152,48 @@ def _ensure_receiver(toolchain) -> None:
             continue
 
 
+ON_TIMEOUT_JAVA = """
+    // Android 15+: limite de 6 h/24 h do dataSync. Parar logo evita o app
+    // ser encerrado com erro pelo sistema. (Adicionado por p4a/hook.py)
+    @Override
+    public void onTimeout(int startId, int fgsType) {
+        try { stopForeground(true); } catch (Exception e) { }
+        stopSelf();
+    }
+"""
+
+
+def _patch_service_java(java_path: Path) -> bool:
+    """Insere onTimeout() no ServiceFavwatch.java gerado. Idempotente."""
+    try:
+        text = java_path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    if "onTimeout(" in text:
+        return False
+    idx = text.rstrip().rfind("}")
+    if idx < 0:
+        return False
+    java_path.write_text(text[:idx] + ON_TIMEOUT_JAVA + text[idx:], encoding="utf-8")
+    return True
+
+
+def _ensure_service_timeout() -> None:
+    for root in (Path.cwd(), Path.cwd() / "src"):
+        try:
+            for p in root.rglob("ServiceFavwatch.java"):
+                if _patch_service_java(p):
+                    print(f"[p4a hook] onTimeout adicionado em {p}")
+        except OSError:
+            pass
+
+
 # Hook entry points
 # python-for-android calls these if present.
 
 def before_apk_build(toolchain):  # noqa: N802
     _ensure_receiver(toolchain)
+    _ensure_service_timeout()
 
 
 def before_apk_package(toolchain):  # noqa: N802
@@ -171,3 +208,4 @@ def after_apk_build(toolchain):  # noqa: N802
 def before_apk_assemble(toolchain):  # noqa: N802
     # Ultima chance antes do Gradle empacotar o APK.
     _ensure_receiver(toolchain)
+    _ensure_service_timeout()
