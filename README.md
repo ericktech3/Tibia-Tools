@@ -1,141 +1,175 @@
-# Tibia Tools (Android)
+<div align="center">
 
-App de utilidades para **Tibia** feito em **Kivy + KivyMD**, pensado para rodar no Android e ser fácil de compilar via **GitHub Actions**.
+<img src="docs/github/banner.jpg" alt="Tibia Tools" width="100%">
 
-> Projeto não-oficial / sem afiliação com CipSoft, Tibia.com, TibiaWiki ou ExevoPan.
+# ⚔️ Tibia Tools
 
----
+**A caixa de ferramentas do Tibia que cabe no bolso.**
 
-## 📱 Funcionalidades
+Bosses, XP, stamina, treino, imbuements e a sua caçada —
+tudo num app Android feito pela guild, para a guild.
 
-### Aba **Char**
-- **Busca de personagem** (nome) usando **TibiaData v4**
-  - mostra informações principais do personagem na tela (ex.: world, vocation, level e status quando disponível).
-- **Abrir no Tibia.com** (link direto do personagem).
-- **Favoritar** o personagem (para aparecer na aba Favoritos).
-- **Calculadora de Shared XP**
-  - informa o range de level que pode fazer party share (⌈2/3⌉ até ⌊3/2⌋ do seu level).
+<!-- ⚠️ Troque SEU-USUARIO pelo seu nome do GitHub nestas duas linhas -->
+[![CI](https://github.com/SEU-USUARIO/Tibia-Tools/actions/workflows/ci.yml/badge.svg)](https://github.com/SEU-USUARIO/Tibia-Tools/actions/workflows/ci.yml)
+[![Release](https://github.com/SEU-USUARIO/Tibia-Tools/actions/workflows/release.yml/badge.svg)](https://github.com/SEU-USUARIO/Tibia-Tools/actions/workflows/release.yml)
 
-### Aba **Favoritos**
-- Lista dos personagens favoritados.
-- Ao tocar em um favorito:
-  - **ABRIR** no Tibia.com
-  - **REMOVER** da lista
+[![Android](https://img.shields.io/badge/Android-APK%20direto-3DDC84?style=for-the-badge&logo=android&logoColor=white)](#-instalar-em-2-minutos)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](#-compilar)
+[![Kivy + KivyMD](https://img.shields.io/badge/Kivy%20%2B%20KivyMD-1.2-00A0E8?style=for-the-badge)](#-como-o-app-funciona)
+[![Testes](https://img.shields.io/badge/testes-129%20passando-4CAF50?style=for-the-badge)](#-qualidade)
+[![Offline](https://img.shields.io/badge/offline-imbuements%20%2B%20cache-FF8F00?style=for-the-badge)](#-funciona-sem-internet)
+[![Anúncios](https://img.shields.io/badge/an%C3%BAncios-zero-9E9E9E?style=for-the-badge)](#-por-que-ele-existe)
 
-### Aba **Mais**
+[Instalar](#-instalar-em-2-minutos) · [O que faz](#-o-que-voc%C3%AA-consegue-fazer) · [Compilar](#-compilar) · [Avisos](#%EF%B8%8F-aviso)
 
-#### 🗡️ Bosses (ExevoPan)
-- Seleção de **World** + botão **Buscar Bosses**.
-- Mostra a lista de bosses e a chance/indicador retornado pelo ExevoPan.
-- Ao tocar no nome do boss:
-  - aparece um **diálogo de confirmação** perguntando se você quer abrir a página do boss
-  - ao confirmar, abre a página no **TibiaWiki (BR)** no navegador.
-
-#### ⭐ Boosted
-- Mostra:
-  - **Boosted Creature**
-  - **Boosted Boss**
-- Botão **refresh** para atualizar (fonte: TibiaData v4).
-
-#### 🏋️ Treino (Exercise)
-Calculadora para treino com **exercise weapons**:
-- Escolha do **tipo de skill** (melee / distance / shielding / magic / fist)
-- Escolha da **vocation**
-- Escolha da **arma de treino** (Standard / Enhanced / Lasting)
-- Informa estimativas de:
-  - charges/quantidade necessária
-  - custo aproximado em gp
-  - resumo do resultado
-
-> As fórmulas são aproximações usadas por calculadoras populares (dummy / exercise). Use como referência.
-
-#### ⚡ Imbuements (offline)
-- Lista e busca de **Imbuements** (ex.: Vampirism, Strike…).
-- Toque em um imbuement para ver detalhes por tier:
-  - **Basic / Intricate / Powerful**
-  - efeito + itens necessários
-- **Offline-first** (sem 403):
-  - os dados vêm de um **seed embutido no APK**: `core/data/imbuements_seed.json`
-  - na primeira execução, o app salva um **cache local** e passa a usar ele.
-
-**Atualizar o seed (para quem mantém o repo):**
-- Script: `tools/update_imbuements_seed.py`
-- Ele baixa/atualiza o `core/data/imbuements_seed.json` antes de compilar uma nova versão.
-
-#### ⏳ Stamina
-Calculadora de stamina offline:
-- Você informa:
-  - **stamina atual** (hh:mm)
-  - **stamina desejada** (hh:mm)
-- O app calcula:
-  - **quanto tempo ficar offline**
-  - **em qual horário** você atinge a stamina alvo (considerando que você desloga “agora”)
-
-Regras consideradas:
-- Regeneração começa **após 10 min offline**
-- Até **39:00**: +1 min stamina a cada **3 min offline**
-- De **39:00 → 42:00**: +1 min stamina a cada **6 min offline**
-
-#### 📊 Hunt Analyzer
-- Cole o texto da sessão (Hunt Session) e o app extrai e formata:
-  - **Loot**
-  - **Supplies**
-  - **Balance**
+</div>
 
 ---
 
-## 🧩 Estrutura do projeto
+## 🤔 Por que ele existe?
 
-- `main.py` — composição do app + fluxos centrais de UI
-- `features/` — controllers por domínio (`char`, `favorites`, `settings`)
-- `services/` — persistência, bridge Android, releases e infraestrutura
-- `integrations/` — chamadas externas (TibiaData, Tibia.com, ExevoPan, GitHub Releases)
-- `tibia_tools.kv` + `ui/kv/` — layout KivyMD modularizado
-- `core/` — regras e cálculos puros (bosses, boosted, imbuements, stamina, training, hunt…)
-- `assets/` — ícone e presplash
-- `.github/workflows/android.yml` — build do APK via GitHub Actions
-- `buildozer.spec` — configuração do Buildozer
+Porque para responder cinco perguntas do dia a dia você abre dez abas:
+*o boss aparece amanhã? quanta stamina falta? quanto custa treinar até o level 100?
+esse imbuement vale os itens? quanto eu lucrei na caçada?*
+
+O **Tibia Tools** junta tudo isso num app só: leve, em português,
+sem cadastro, sem conta, sem anúncio e sem rastreador.
+Funciona no celular e boa parte dele funciona **sem internet**.
 
 ---
 
-## 🛠️ Build pelo GitHub (recomendado)
+## 📱 Instalar em 2 minutos
 
-O workflow **Build Android APK (Kivy/Buildozer)** roda:
-- automaticamente em push na branch `main`
-- manualmente em **Actions → Run workflow**
+1. Abra a aba **[Releases](https://github.com/SEU-USUARIO/Tibia-Tools/releases)** deste repositório.
+2. Baixe o arquivo `.apk` mais recente.
+3. Toque no arquivo baixado e aceite a opção de **instalar apps desconhecidos**.
+4. Pronto. Não precisa criar conta nem fazer login.
 
-Ele gera o APK como **artifact** do workflow.
+> Internet é usada só para: personagem, bosses, boosted e checagem de atualização.
+> O resto (imbuements, stamina, treino, hunt, share XP) funciona no avião.
 
-### 🚀 Release pipeline (tag → GitHub Release)
+---
 
-O workflow **Build and Publish Android Release** roda quando você publica uma tag `v*` (por exemplo `v0.1.0`) ou manualmente em **Actions → Run workflow**.
+## ✨ O que você consegue fazer
 
-Ele faz 4 coisas:
-- valida que a tag bate com a `version` do `buildozer.spec`
-- compila um APK de **release**
-- assina o APK com seu keystore Android
-- publica o APK em **GitHub Releases**
+| Aba | O que tem lá dentro |
+| --- | --- |
+| 🏠 **Home** | boosted do dia, último personagem consultado e seus bosses favoritos com chance alta |
+| 🧙 **Char** | busca do personagem, XP dos últimos 30 dias, últimas mortes, chars da conta e Tibia Stalker |
+| 🤝 **Share XP** | a faixa de level liberada para dividir experiência |
+| ⭐ **Favoritos** | seus personagens salvos, com atalho para o Tibia.com |
+| 🧰 **Mais** | bosses, boosted, treino, imbuements, stamina e hunt analyzer |
+| ⚙️ **Configurações** | tema, avisos, serviço em segundo plano e atualização do app |
 
-Isso deixa o app alinhado com o botão **Check updates**, que consulta a última release do repositório.
+### 🧙 Char — o personagem por inteiro
+- Busca por nome (fonte: **TibiaData v4**) com world, vocação, level e status.
+- **XP dos últimos 30 dias** (fonte: GuildStats): total de 7 e 30 dias, média diária, melhor dia, dias ativos e atraso dos dados.
+- **Últimas mortes**: data, nível, XP perdida e o motivo de cada uma.
+- **Outros personagens da conta** — quando a Tibia informa.
+- **Tibia Stalker**: sugestões de quem pode estar na mesma conta (probabilidade, não certeza).
+- Um toque para **favoritar** ou abrir o personagem no **Tibia.com**.
 
-### Secrets necessários para release
+### 🤝 Share XP
+Informe seu level e veja na hora a faixa liberada para party share:
+de ⌈2/3 do level⌉ até ⌊3/2 do level⌋.
 
-Configure estes secrets no repositório:
-- `ANDROID_KEYSTORE_BASE64` — conteúdo do `.jks/.keystore` em Base64
-- `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
+### ⚔️ Bosses (ExevoPan)
+- Lista completa por **world**, com a chance e **quantos dias faltam para aparecer**
+  (ex.: *Ghazbaran — Sem chance · Aparecerá em: 6 dias*).
+- Filtro por chance e modo **só favoritos**.
+- Boss favorito pode **avisar quando estiver perto de aparecer**.
+- Toque no nome para abrir a página do boss no **TibiaWiki BR**.
 
-Exemplo para gerar o Base64 do keystore localmente:
+### ⭐ Boosted
+Criatura e boss do dia, com sprite baixado e guardado no celular.
+
+### 🏋️ Treino (Exercise)
+Escolha a skill (melee, distance, shielding, magic, fist), a vocação e a arma
+(Standard, Enhanced ou Lasting) e receba as **cargas necessárias**, o **custo em gp** e um resumo.
+
+### 🧪 Imbuements — offline
+Lista com busca, detalhe por tier (**Basic / Intricate / Powerful**), efeito e itens necessários.
+Os dados vêm embutidos no APK: funciona sem internet.
+
+### ⏳ Stamina
+Informe a stamina atual e a desejada: o app diz **quanto tempo ficar offline** e
+**em que horário** você chega lá, respeitando as regras reais de regeneração.
+
+### 📊 Hunt Analyzer
+Cole o texto da sessão de caça e receba **loot**, **supplies** e **balance** organizados.
+
+### 🔔 Avisos e segundo plano
+- Aviso quando o **boosted mudar** ou quando um **boss favorito ficar High**.
+- **Monitorar favoritos com o app fechado** (serviço em primeiro plano do Android).
+- Iniciar com o celular ligando, avisar quando ficar **online**, quando **upar level** ou quando **morrer**.
+- Intervalo do monitor configurável.
+
+### 🎨 Configurações
+Tema claro ou escuro, limpeza de cache, e **checagem de atualização** direto no GitHub
+com atalho para a página de releases.
+
+---
+
+## 🌐 Funciona sem internet?
+
+Sim, em partes. As últimas respostas ficam guardadas no celular em um cache
+seguro (JSON, sem pickle, com validade). Sem sinal, o app mostra o último dado
+que ele tem e avisa a idade dele — por exemplo, *"dados de 10 minutos atrás"*.
+Imbuements nunca precisa de rede.
+
+---
+
+## 🧱 Como o app funciona
+
+```text
+main.py                → composição do app e fluxos de tela
+features/              → controllers por domínio (char, bosses, favoritos, settings)
+core/                  → cálculos puros (stamina, treino, imbuements, hunt, share XP, cache)
+integrations/          → TibiaData, Tibia.com, ExevoPan, Tibia Stalker, GitHub
+integrations/parsers/  → leitura das páginas (ExevoPan, GuildStats) separada das chamadas
+services/              → persistência, ponte com o Android, releases e relatórios de erro
+ui/kv/                 → telas em KivyMD, um arquivo por tela
+assets/                → ícone e tela de abertura
+.github/workflows/     → testes (ci.yml), release assinada (release.yml), limpeza
+buildozer.spec         → configuração do Buildozer
+```
+
+Regras do projeto ficam documentadas em [`AGENTS.md`](AGENTS.md) — leia antes de mexer.
+
+---
+
+## 🧪 Qualidade
+
+- **129 testes automáticos** cobrindo cache, filtros de bosses, parsers, XP, mortes,
+  navegação com o botão voltar, releases e a tela de personagem.
+- A cada envio de código o GitHub roda sozinho:
+  verificação de sintaxe, procura de nomes indefinidos, checagem dos arquivos `.kv`
+  e a bateria de testes.
+- Build Android fixa a versão do python-for-android para não quebrar do nada.
+
 ```bash
-base64 -w 0 meu-keystore.jks
+python -m unittest discover -s tests -v
 ```
 
 ---
 
-## 🧪 Build local (Linux / WSL2)
+## 🔨 Compilar
 
-Pré-requisitos (exemplo):
+### Pelo GitHub (recomendado)
+- **Push na `main`** → o workflow de release gera o APK como *artifact* para baixar.
+- **Tag `v1.2`** → compila, **assina o APK** e publica em **GitHub Releases**.
+  A tag precisa bater com a `version` do `buildozer.spec` (hoje `1.2`).
+
+Secrets necessários para assinar a release:
+
+| Secret | O que é |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | seu keystore `.jks` convertido em Base64 (`base64 -w0 meu.jks`) |
+| `ANDROID_KEYSTORE_PASSWORD` | senha do keystore |
+| `ANDROID_KEY_ALIAS` | nome da chave dentro do keystore |
+| `ANDROID_KEY_PASSWORD` | senha da chave |
+
+### No computador (Linux ou WSL2)
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-pip git zip unzip openjdk-17-jdk \
@@ -143,6 +177,7 @@ sudo apt install -y python3 python3-pip git zip unzip openjdk-17-jdk \
   libssl-dev libffi-dev libltdl-dev \
   libncurses5-dev libncursesw5-dev zlib1g-dev \
   libbz2-dev libreadline-dev libsqlite3-dev
+
 python3 -m pip install --upgrade pip
 python3 -m pip install buildozer cython==0.29.36
 buildozer -v android debug
@@ -150,35 +185,55 @@ buildozer -v android debug
 
 ---
 
-## 🎨 Presplash / Ícone
+## 🩹 Deu errado?
 
-- Ícone: `assets/icon.png`
-- Presplash: `assets/presplash.png`
+Abra uma [issue](https://github.com/SEU-USUARIO/Tibia-Tools/issues) contando o que aconteceu e, se der, anexe o log
+`tibia_tools_crash.log` (fica na pasta do app no celular).
+Erros em tela de bosses, XP e personagem costumam ser mudança no site de origem —
+são rápidos de corrigir assim que a gente vê o log.
 
-No `buildozer.spec`:
-```ini
-icon.filename = assets/icon.png
-presplash.filename = assets/presplash.png
-android.presplash_color = #000000
-```
+## 🗺️ Ideias abertas
 
----
+- Notificações de boss favorável no horário certo.
+- Histórico de XP em gráfico.
+- Mais idiomas e mais worlds.
+- Temas por guild.
 
-## ⚠️ Observações
-- Para buscar dados online (char/boosted/bosses), o app precisa de **INTERNET**.
-- Imbuements foi desenhado para funcionar **offline** (seed embutido + cache).
-- Sem licença definida no momento (uso pessoal/guild). Se quiser, você pode adicionar uma licença (ex.: MIT).
+Pode abrir issue, sugerir ou mandar pull request — é bem-vindo.
 
 ---
 
-## 👤 Créditos
-- **Erick Bandeira (Monk Curandeiro)** — idealização, especificação, testes e manutenção do projeto para uso na guild.
+## 🙏 Fontes de dados
 
-## 📌 Fontes de dados
-- TibiaData API (personagem/boosted)
-- ExevoPan (lista de bosses por world)
-- TibiaWiki (páginas de bosses + referência de imbuements)
+[TibiaData](https://tibiadata.com) (personagem e boosted) ·
+[GuildStats](https://guildstats.eu) (histórico de XP e mortes) ·
+[Tibia.com](https://www.tibia.com) ·
+[ExevoPan](https://www.exevopan.com) (bosses por world) ·
+[TibiaWiki BR](https://tibiawiki.com.br) (páginas de boss) ·
+[Tibia Stalker](https://www.tibiastalker.pl) (sugestões de conta)
 
-## Observação sobre versão de release
+---
 
-- O workflow de release aceita tags como `v0.1.0` (e também tolera `v.0.1.0`), mas normaliza a versão para `0.1.0` no `buildozer.spec` durante a build porque o python-for-android não aceita o prefixo `v` na versão do app.
+## ⚠️ Aviso
+
+Projeto **não-oficial**, de uso pessoal e de guild, sem afiliação com a CipSoft,
+Tibia.com, TibiaWiki ou ExevoPan. Não vende nada, não coleta dados e não tem anúncios.
+Os cálculos de treino, share XP e stamina são aproximações conferidas contra
+referências da comunidade — use como apoio, não como garantia.
+Sem licença definida no momento.
+
+## 👤 Autor
+
+**Erick Bandeira** — *Monk Curandeiro* · idealização, especificação, testes e manutenção.
+
+<div align="center">
+
+Feito com Kivy, KivyMD, Buildozer e muita teimosia. 🐉
+
+</div>
+
+<!--
+  Capturas de tela: tire prints do app, salve em docs/screenshots/ e use o modelo abaixo.
+  Uma linha por print:
+  <img src="docs/screenshots/char.png" width="230" alt="Tela de personagem">
+-->
