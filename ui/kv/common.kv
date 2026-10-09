@@ -1,4 +1,7 @@
 #:import dp kivy.metrics.dp
+#:set CARD_RADIUS dp(22)
+#:set FIELD_RADIUS dp(12)
+#:set PAGE_GAP dp(16)
 
 # Centraliza título e ações em toda a altura da barra M2 (KivyMD 1.2).
 <MDTopAppBar>:
@@ -6,16 +9,27 @@
 
 # ---------- UI defaults (polish) ----------
 <MDCard>:
-    radius: [dp(16), dp(16), dp(16), dp(16)]
+    radius: [CARD_RADIUS] * 4
     elevation: 1
 
 <MDRaisedButton>:
     size_hint_y: None
     height: dp(44)
+    rounded_button: True
+    elevation: 0
+
+<MDRectangleFlatIconButton>:
+    rounded_button: True
+
+<MDTextField>:
+    radius: [FIELD_RADIUS] * 4
+
+<MDDialog>:
+    radius: [CARD_RADIUS] * 4
 
 <AppCard@MDCard>:
     padding: dp(14)
-    radius: [dp(18), dp(18), dp(18), dp(18)]
+    radius: [CARD_RADIUS] * 4
     elevation: 1
 
 <StatusBarSpacer@Widget>:
@@ -32,6 +46,7 @@
 <HintText@MDLabel>:
     theme_text_color: "Hint"
     font_style: "Caption"
+    text_size: self.width, None
     size_hint_y: None
     height: self.texture_size[1] + dp(6)
 

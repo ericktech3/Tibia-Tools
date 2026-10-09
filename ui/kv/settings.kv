@@ -7,7 +7,7 @@
         MDTopAppBar:
             title: "Configurações"
             left_action_items: [["arrow-left", lambda x: app.navigate_back()]]
-            elevation: 2
+            elevation: 0
 
         MDScrollView:
             do_scroll_x: False
@@ -15,9 +15,36 @@
             MDBoxLayout:
                 orientation: "vertical"
                 padding: dp(12)
-                spacing: dp(12)
+                spacing: PAGE_GAP
                 size_hint_y: None
                 height: self.minimum_height
+
+                MDBoxLayout:
+                    orientation: "vertical"
+                    spacing: dp(8)
+                    padding: dp(4), dp(8)
+                    size_hint_y: None
+                    height: self.minimum_height
+
+                    SectionTitle:
+                        text: "Sobre o Tibia Tools"
+
+                    MDLabel:
+                        id: set_app_version
+                        text: "Versão " + app.app_version
+                        font_style: "Body2"
+                        size_hint_y: None
+                        text_size: self.width, None
+                        height: self.texture_size[1] + dp(6)
+
+                    MDLabel:
+                        id: set_legal_notice
+                        text: app.legal_notice
+                        font_style: "Body2"
+                        theme_text_color: "Secondary"
+                        text_size: self.width, None
+                        size_hint_y: None
+                        height: self.texture_size[1] + dp(8)
 
                 AppCard:
                     size_hint_y: None

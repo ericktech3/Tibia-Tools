@@ -8,7 +8,7 @@
 
         MDTopAppBar:
             title: "Tibia Tools"
-            elevation: 2
+            elevation: 0
 
         MDBottomNavigation:
             id: bottom_nav
@@ -27,13 +27,13 @@
                     MDBoxLayout:
                         orientation: "vertical"
                         padding: dp(12)
-                        spacing: dp(12)
+                        spacing: PAGE_GAP
                         size_hint_y: None
                         height: self.minimum_height
 
                         MDCard:
                             padding: dp(12)
-                            radius: [dp(16), dp(16), dp(16), dp(16)]
+                            radius: [CARD_RADIUS] * 4
                             elevation: 1
                             size_hint_y: None
                             height: self.minimum_height
@@ -117,7 +117,7 @@
 
                         MDCard:
                             padding: dp(12)
-                            radius: [dp(16), dp(16), dp(16), dp(16)]
+                            radius: [CARD_RADIUS] * 4
                             elevation: 1
                             size_hint_y: None
                             height: self.minimum_height
@@ -152,7 +152,7 @@
 
                         MDCard:
                             padding: dp(12)
-                            radius: [dp(16), dp(16), dp(16), dp(16)]
+                            radius: [CARD_RADIUS] * 4
                             elevation: 1
                             size_hint_y: None
                             height: self.minimum_height
@@ -245,7 +245,7 @@
                             spacing: dp(6)
                             size_hint_y: None
                             height: self.minimum_height
-                            radius: [dp(16), dp(16), dp(16), dp(16)]
+                            radius: [CARD_RADIUS] * 4
                             elevation: 1
 
                             MDBoxLayout:
@@ -290,7 +290,7 @@
                             spacing: dp(6)
                             size_hint_y: None
                             height: self.minimum_height
-                            radius: [dp(16), dp(16), dp(16), dp(16)]
+                            radius: [CARD_RADIUS] * 4
                             elevation: 1
 
                             MDBoxLayout:
@@ -337,7 +337,7 @@
                             spacing: dp(6)
                             size_hint_y: None
                             height: self.minimum_height
-                            radius: [dp(16), dp(16), dp(16), dp(16)]
+                            radius: [CARD_RADIUS] * 4
                             elevation: 1
 
                             MDBoxLayout:
@@ -377,7 +377,7 @@
                             spacing: dp(6)
                             size_hint_y: None
                             height: self.minimum_height
-                            radius: [dp(16), dp(16), dp(16), dp(16)]
+                            radius: [CARD_RADIUS] * 4
                             elevation: 1
 
                             MDBoxLayout:
@@ -410,7 +410,7 @@
                             spacing: dp(6)
                             size_hint_y: None
                             height: self.minimum_height
-                            radius: [dp(16), dp(16), dp(16), dp(16)]
+                            radius: [CARD_RADIUS] * 4
                             elevation: 1
 
                             MDBoxLayout:
@@ -461,7 +461,7 @@
                     MDBoxLayout:
                         orientation: "vertical"
                         padding: dp(12)
-                        spacing: dp(12)
+                        spacing: PAGE_GAP
                         size_hint_y: None
                         height: self.minimum_height
                         adaptive_height: True
@@ -514,7 +514,7 @@
                     MDBoxLayout:
                         orientation: "vertical"
                         padding: dp(12)
-                        spacing: dp(12)
+                        spacing: PAGE_GAP
                         size_hint_y: None
                         height: self.minimum_height
                         adaptive_height: True
@@ -562,7 +562,7 @@
                     MDBoxLayout:
                         orientation: "vertical"
                         padding: dp(12)
-                        spacing: dp(12)
+                        spacing: PAGE_GAP
                         size_hint_y: None
                         height: self.minimum_height
                         adaptive_height: True
