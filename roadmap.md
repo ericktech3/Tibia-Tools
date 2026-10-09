@@ -46,5 +46,7 @@
 - [ ] Rodar o teste em emulador e o checklist no aparelho.
 ## v16 — main.py dividido
 - [x] Bosses, Boosted, Treino e Imbuements em features/<tela>/controller.py (main.py: 2.900 → 1.800 linhas).
-- [ ] Próximo: dividir features/char/controller.py (1.600 linhas) em partes menores.
-- [ ] Rodar teste em emulador e checklist no aparelho.
+- [x] APK v16 testado com sucesso no Galaxy S25+.
+## v17 — Personagem dividido
+- [x] features/char: controller (busca, 665 linhas) + display + stalker + history + _common.
+- [ ] Opcional: rodar o teste em emulador (Android 10/13/14) no GitHub.
