@@ -156,8 +156,8 @@ python -m unittest discover -s tests -v
 
 ### Pelo GitHub (recomendado)
 - **Push na `main`** → o workflow de release gera o APK como *artifact* para baixar.
-- **Tag `v1.2`** → compila, **assina o APK** e publica em **GitHub Releases**.
-  A tag precisa bater com a `version` do `buildozer.spec` (hoje `1.2`).
+- **Tag `v<versão>`** (ex.: `v1.2.1`) → compila, **assina o APK** e publica em **GitHub Releases**.
+  A tag precisa bater com a `version` do `buildozer.spec` (confira a linha `version =` antes de criar a tag).
 
 Secrets necessários para assinar a release:
 

@@ -36,3 +36,12 @@
 - [ ] Gerar APK de teste automaticamente no GitHub (CI de release)
 - [ ] Dividir o arquivo principal do app (main.py) em partes menores
 - [ ] Testar monitoramento em aparelho real com Android 15/16 (5h30 → pausa → retomada ao abrir o app)
+## v15 — Revisão de código (higiene, HTTP, privacidade)
+- [x] Removido log do projeto; .gitignore; teste impede logs, .pyc versionados e workflows de backup.
+- [x] Cliente HTTP explícito (core/http_client.py); requests global não é mais alterado.
+- [x] Busca simultânea: quem espera recebe o mesmo sucesso/erro/dado antigo, sem buscar de novo.
+- [x] Log sem nomes pesquisados/URLs com parâmetros; .old expira em 14 dias; botões Compartilhar/Apagar log.
+- [x] Fuso horário do servidor via zoneinfo (com regra manual de reserva).
+- [x] README sem versão fixa; teste em emulador (manual) e checklist docs/TESTES_ANDROID.md.
+- [ ] Rodar o teste em emulador e o checklist no aparelho.
+- [ ] Próximo: separar Bosses/Boosted/Treino/Imbuements do main.py (um por vez) e reduzir o controller de Char.

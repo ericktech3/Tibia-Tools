@@ -1,0 +1,18 @@
+# Python compilado
+__pycache__/
+*.py[cod]
+
+# Logs e diagnósticos (nunca versionar)
+*.log
+*.log.old
+
+# Build Android
+.buildozer/
+bin/
+
+# Backups / arquivos temporários
+*.bak
+*.orig
+*.ymlmm
+*~
+.DS_Store
