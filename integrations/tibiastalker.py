@@ -7,6 +7,8 @@ from urllib.parse import quote
 
 import requests
 
+from core.http_client import get as http_get
+
 UA = {
     "User-Agent": (
         "Mozilla/5.0 (Linux; Android 13; Mobile) "
@@ -28,7 +30,7 @@ class TibiaStalkerError(RuntimeError):
 def fetch_stalker_character(name: str, timeout: int = 12) -> Dict[str, Any]:
     safe_name = quote(str(name).strip())
     url = CHARACTER_URL.format(name=safe_name)
-    resp = requests.get(url, timeout=timeout, headers=UA)
+    resp = http_get(url, timeout=timeout, headers=UA)
     if resp.status_code == 404:
         return {}
     resp.raise_for_status()

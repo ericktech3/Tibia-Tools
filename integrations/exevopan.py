@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Dict, List
 
 import requests
+
+from core.http_client import get as http_get
 from urllib.parse import quote
 
 from core.result import EMPTY, INVALID_INPUT, SITE_ERROR, Result, classify_exception, response_meta
@@ -39,7 +41,7 @@ def fetch_exevopan_result(world: str, timeout: int = 20) -> Result:
     for tpl in EXEVOPAN_URLS:
         url = tpl.format(world=quote(world))
         try:
-            r = requests.get(url, headers=HEADERS, timeout=timeout)
+            r = http_get(url, headers=HEADERS, timeout=timeout)
         except Exception as exc:
             last_kind = classify_exception(exc)
             continue

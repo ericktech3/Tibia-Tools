@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional, Set
 from urllib.parse import quote, quote_plus
 
 import requests
+
+from core.http_client import get as http_get
 from bs4 import BeautifulSoup
 
 TIBIADATA_CHAR = "https://api.tibiadata.com/v4/character/{name}"
@@ -24,7 +26,7 @@ _UA = {
 
 def fetch_character_raw(name: str, timeout: int = 12) -> Dict[str, Any]:
     url = TIBIADATA_CHAR.format(name=quote(str(name)))
-    r = requests.get(url, timeout=timeout, headers=_UA)
+    r = http_get(url, timeout=timeout, headers=_UA)
     r.raise_for_status()
     return r.json() if r.text else {}
 
@@ -45,7 +47,7 @@ def fetch_world_online_players(world: str, timeout: int = 12) -> Optional[Set[st
     try:
         safe_world = quote(str(world).strip())
         url = TIBIADATA_WORLD.format(world=safe_world)
-        r = requests.get(url, timeout=timeout, headers=_UA)
+        r = http_get(url, timeout=timeout, headers=_UA)
         r.raise_for_status()
         data = r.json() if r.text else {}
         wb = (data or {}).get("world", {}) if isinstance(data, dict) else {}
@@ -135,7 +137,7 @@ def is_character_online_tibia_com(name: str, world: str, timeout: int = 12, *, l
     try:
         safe_name = quote_plus(str(name))
         url = TIBIA_CHAR_URL.format(name=safe_name)
-        r = requests.get(url, timeout=timeout, headers=_UA)
+        r = http_get(url, timeout=timeout, headers=_UA)
         if r.status_code != 200:
             return None
         html = r.text or ""
@@ -169,6 +171,23 @@ def is_character_online_tibia_com(name: str, world: str, timeout: int = 12, *, l
 
 
 def eu_dst_offset_hours(dt_local: datetime) -> int:
+    """Diferença (h) entre o horário do servidor (Europe/Berlin) e UTC.
+
+    Usa o banco de fusos oficial (zoneinfo) quando disponível; no Android o
+    banco pode faltar, então cai na regra manual da UE (último domingo de
+    março/outubro), que é equivalente para Berlim.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        off = dt_local.replace(tzinfo=ZoneInfo("Europe/Berlin")).utcoffset()
+        if off is not None:
+            return int(off.total_seconds() // 3600)
+    except Exception:
+        pass
+    return _eu_dst_offset_manual(dt_local)
+
+
+def _eu_dst_offset_manual(dt_local: datetime) -> int:
     year = dt_local.year
     mar31 = datetime(year, 3, 31)
     last_sun_march = mar31 - timedelta(days=(mar31.weekday() + 1) % 7)
@@ -222,7 +241,7 @@ def fetch_last_login_dt(name: str, timeout: int = 12) -> Optional[datetime]:
     try:
         safe = quote_plus(str(name))
         url = TIBIA_CHAR_URL.format(name=safe)
-        r = requests.get(url, timeout=timeout, headers=_UA)
+        r = http_get(url, timeout=timeout, headers=_UA)
         if r.status_code != 200:
             return None
         html = r.text or ""

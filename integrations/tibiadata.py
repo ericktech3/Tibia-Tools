@@ -20,6 +20,8 @@ import html as _html
 from urllib.parse import quote, quote_plus, urljoin
 
 import requests
+
+from core.http_client import get as http_get
 from bs4 import BeautifulSoup
 
 
@@ -56,7 +58,7 @@ def _get_json(url: str, timeout: int) -> Dict[str, Any]:
     last_exc: Exception | None = None
     for attempt in range(3):
         try:
-            r = requests.get(url, timeout=timeout, headers=UA)
+            r = http_get(url, timeout=timeout, headers=UA)
             # Alguns endpoints podem devolver 5xx temporariamente
             if int(getattr(r, "status_code", 0) or 0) >= 500:
                 raise requests.HTTPError(f"HTTP {r.status_code}", response=r)
@@ -79,11 +81,11 @@ def _get_text(url: str, timeout: int, headers: Optional[dict] = None) -> str:
     for attempt in range(3):
         try:
             try:
-                r = requests.get(url, timeout=timeout, headers=hdr)
+                r = http_get(url, timeout=timeout, headers=hdr)
             except requests.exceptions.SSLError:
                 # Fansites podem falhar em alguns builds Android com OpenSSL/CA antigos.
                 # Como é uma fonte auxiliar e somente leitura, tentamos novamente sem verify.
-                r = requests.get(url, timeout=timeout, headers=hdr, verify=False)
+                r = http_get(url, timeout=timeout, headers=hdr, verify=False)
             if int(getattr(r, "status_code", 0) or 0) >= 500:
                 raise requests.HTTPError(f"HTTP {r.status_code}", response=r)
             if r.status_code != 200:
