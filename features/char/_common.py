@@ -137,6 +137,23 @@ from integrations.tibiastalker import (
 from core.exp_loss import estimate_death_exp_lost
 from services.error_reporting import log_current_exception
 
+__all__ = [
+    "math", "threading", "time", "urllib", "webbrowser",
+    "datetime", "timedelta", "requests", "Clock", "dp",
+    "Color", "RoundedRectangle", "ButtonBehavior",
+    "MDBoxLayout", "MDLabel", "MDIcon",
+    "OneLineIconListItem", "TwoLineIconListItem", "IconLeftWidget",
+    "MDDropdownMenu", "MDProgressBar", "MDWidget",
+    "_xp_stats",
+    "fetch_character_tibiadata", "fetch_guildstats_deaths_xp",
+    "fetch_guildstats_exp_changes", "is_character_online_tibia_com",
+    "build_stalker_character_url", "extract_stalker_candidates",
+    "fetch_stalker_character", "estimate_death_exp_lost",
+    "log_current_exception",
+    "_friendly_char_error", "_StalkerCandidateItem", "_StalkerBadge",
+]
+
+
 
 def _friendly_char_error(exc) -> str:
     """Mensagem amigavel (nunca deve levantar excecao)."""

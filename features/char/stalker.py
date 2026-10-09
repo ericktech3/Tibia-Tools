@@ -1,8 +1,8 @@
 """Sugestões de personagens (TibiaStalker) e seus cartões."""
-# flake8: noqa
-from features.char._common import *  # noqa: F401,F403
-from features.char._common import (  # noqa: F401
-    _friendly_char_error, _StalkerCandidateItem, _StalkerBadge, _xp_stats,
+from features.char._common import (
+    dp, webbrowser,
+    MDBoxLayout, MDIcon, MDLabel, MDProgressBar,
+    _StalkerBadge, _StalkerCandidateItem, log_current_exception,
 )
 
 

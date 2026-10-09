@@ -1,8 +1,11 @@
 """Tela de personagem: busca e ações. Peças separadas em display/stalker/history."""
-# flake8: noqa
-from features.char._common import *  # noqa: F401,F403
-from features.char._common import (  # noqa: F401
-    _friendly_char_error, _StalkerCandidateItem, _StalkerBadge, _xp_stats,
+from features.char._common import (
+    Clock, datetime, requests, threading, time, timedelta, urllib, webbrowser,
+    _friendly_char_error, build_stalker_character_url, estimate_death_exp_lost,
+    extract_stalker_candidates, fetch_character_tibiadata,
+    fetch_guildstats_deaths_xp, fetch_guildstats_exp_changes,
+    fetch_stalker_character, is_character_online_tibia_com,
+    log_current_exception,
 )
 from features.char.display import CharDisplayMixin
 from features.char.stalker import CharStalkerMixin

@@ -1,8 +1,9 @@
 """Montagem visual do resultado da busca (carregando, erro, resultado, mortes)."""
-# flake8: noqa
-from features.char._common import *  # noqa: F401,F403
-from features.char._common import (  # noqa: F401
-    _friendly_char_error, _StalkerCandidateItem, _StalkerBadge, _xp_stats,
+from features.char._common import (
+    datetime, dp,
+    IconLeftWidget, MDBoxLayout, MDIcon, MDLabel,
+    OneLineIconListItem, TwoLineIconListItem,
+    _StalkerCandidateItem, _xp_stats, log_current_exception,
 )
 
 
@@ -199,7 +200,6 @@ class CharDisplayMixin:
 
         # XP últimos 30 dias (GuildStats tab=9)
         exp_rows_30 = payload.get("exp_rows_30") or []
-        exp_total_30 = payload.get("exp_total_30")
         setattr(home, "char_xp_source_url", str(payload.get("gs_exp_url") or ""))
         setattr(home, "_last_char_payload", payload)
 
