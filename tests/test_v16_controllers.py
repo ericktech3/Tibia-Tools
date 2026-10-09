@@ -7,6 +7,9 @@ EXPECTED = {
     "features.bosses.controller": ["bosses_fetch", "bosses_apply_filters", "boss_toggle_favorite", "open_world_menu"],
     "features.boosted.controller": ["update_boosted", "_boosted_done"],
     "features.training.controller": ["training_calculate", "training_open_menu"],
+    "features.char.display": ["_char_show_result", "_char_show_error", "_char_set_loading"],
+    "features.char.stalker": ["_build_stalker_candidate_widget", "open_char_from_stalker_list"],
+    "features.char.history": ["open_char_history_menu", "_add_to_char_history"],
     "features.imbuements.controller": ["imbuements_refresh_list", "imbuement_toggle_favorite", "_imbu_show"],
 }
 
