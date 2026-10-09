@@ -8,7 +8,6 @@ from urllib.parse import quote
 from core.result import EMPTY, INVALID_INPUT, SITE_ERROR, Result, classify_exception, response_meta
 
 # Parsers ficam separados (sem rede). Reexportados aqui por compatibilidade.
-from integrations.parsers.exevopan_parser import *  # noqa: F401,F403
 from integrations.parsers.exevopan_parser import (  # noqa: F401
     _CHANCE_RE, _EXPECTED_RE, _normalize_chance, _normalize_expected,
     _parse_from_next_data, _parse_from_text, _score, parse_bosses,
