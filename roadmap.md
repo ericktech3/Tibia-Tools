@@ -44,4 +44,7 @@
 - [x] Fuso horário do servidor via zoneinfo (com regra manual de reserva).
 - [x] README sem versão fixa; teste em emulador (manual) e checklist docs/TESTES_ANDROID.md.
 - [ ] Rodar o teste em emulador e o checklist no aparelho.
-- [ ] Próximo: separar Bosses/Boosted/Treino/Imbuements do main.py (um por vez) e reduzir o controller de Char.
+## v16 — main.py dividido
+- [x] Bosses, Boosted, Treino e Imbuements em features/<tela>/controller.py (main.py: 2.900 → 1.800 linhas).
+- [ ] Próximo: dividir features/char/controller.py (1.600 linhas) em partes menores.
+- [ ] Rodar teste em emulador e checklist no aparelho.
