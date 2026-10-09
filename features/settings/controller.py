@@ -6,6 +6,7 @@ import webbrowser
 from kivy.clock import Clock
 
 from core import state as fav_state
+from core.app_info import about_text, get_app_version
 from services.error_reporting import log_current_exception
 from services.release_service import (
     GithubReleaseLookupError,
@@ -18,20 +19,7 @@ from services.release_service import (
 
 class SettingsControllerMixin:
     def show_about(self):
-        txt = (
-            "Tibia Tools\n"
-            "\n"
-            "• Consulta de personagens (status, guild, houses, mortes)\n"
-            "• Favoritos com monitoramento em background (online/morte/level)\n"
-            "• Boosted / Bosses / Treino / Hunt Analyzer / Imbuements\n"
-            "\n"
-            "Observações:\n"
-            "- Dados de status vêm de TibiaData e Tibia.com (quando necessário).\n"
-            "- Histórico de XP (30 dias) usa um fansite como fonte auxiliar.\n"
-            "\n"
-            "Dica: toque em qualquer notificação de favorito para abrir a aba de personagem automaticamente."
-        )
-        self._show_text_dialog("Sobre", txt)
+        self._show_text_dialog("Sobre", about_text(get_app_version()))
 
     def show_changelog(self):
         txt = (
