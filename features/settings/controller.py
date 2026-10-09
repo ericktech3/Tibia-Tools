@@ -44,6 +44,40 @@ class SettingsControllerMixin:
         )
         self._show_text_dialog("Novidades", txt)
 
+    def settings_share_log(self):
+        """Compartilha o log de erros (sem dados pessoais) — só quando o usuário pede."""
+        from services.error_reporting import read_crash_log
+        text = read_crash_log()
+        if not text.strip():
+            self.toast("Nenhum erro registrado.")
+            return
+        try:
+            from jnius import autoclass  # type: ignore
+            Intent = autoclass("android.content.Intent")
+            String = autoclass("java.lang.String")
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            intent = Intent(Intent.ACTION_SEND)
+            intent.setType("text/plain")
+            intent.putExtra(Intent.EXTRA_SUBJECT, String("Tibia Tools - log de erros"))
+            intent.putExtra(Intent.EXTRA_TEXT, String(text))
+            chooser = Intent.createChooser(intent, String("Compartilhar log"))
+            PythonActivity.mActivity.startActivity(chooser)
+            return
+        except Exception:
+            pass
+        try:
+            from kivy.core.clipboard import Clipboard
+            Clipboard.copy(text)
+            self.toast("Log copiado para a área de transferência.")
+        except Exception:
+            log_current_exception(prefix="[settings] falha ao compartilhar log")
+            self.toast("Não foi possível compartilhar o log.")
+
+    def settings_delete_log(self):
+        from services.error_reporting import delete_crash_log
+        delete_crash_log()
+        self.toast("Log de erros apagado.")
+
     def open_feedback(self):
         url = str(self._prefs_get("repo_url", "") or "").strip()
         if url and "github.com" in url.lower():
