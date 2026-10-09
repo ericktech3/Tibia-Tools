@@ -274,6 +274,17 @@ def _make_session() -> requests.Session:
     return s
 
 
+def _wait_seconds(timeout) -> float:
+    """Tempo máximo de espera para qualquer formato de timeout do requests
+    (número, tupla (conexão, leitura) ou None)."""
+    if isinstance(timeout, (tuple, list)):
+        vals = [float(v) for v in timeout if isinstance(v, (int, float))]
+        return sum(vals) if vals else 20.0
+    if isinstance(timeout, (int, float)) and timeout > 0:
+        return float(timeout)
+    return 20.0
+
+
 def _key(url, kwargs):
     params = kwargs.get("params")
     raw = kwargs.get("headers") or {}
@@ -325,7 +336,7 @@ def cached_get(url, params=None, **kwargs):
     if not owner:
         # Outra thread já está buscando a mesma URL: espera e recebe EXATAMENTE
         # o mesmo desfecho (sucesso, dado antigo ou erro). Nunca refaz a busca.
-        if not job["ev"].wait(timeout=(kwargs.get("timeout") or 20) + 5):
+        if not job["ev"].wait(timeout=_wait_seconds(kwargs.get("timeout")) + 5):
             stale = _stale_response(k, url)
             if stale is not None:
                 return stale
