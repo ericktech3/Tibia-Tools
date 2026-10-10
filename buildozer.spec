@@ -40,7 +40,7 @@ source.exclude_dirs = tests,__pycache__,.git,.github,.pytest_cache
 source.exclude_patterns = *.bak,*.orig,*.pyc,*.pyo
 
 # (str) Application versioning (method 1)
-version = 2.0
+version = 1.2.1
 
 # (list) Application requirements
 # ✅ trava o KivyMD na versão compatível com MDBottomNavigation etc.
@@ -71,7 +71,7 @@ p4a.branch = v2024.01.21
 # p4a.commit = <optional specific commit SHA>
 
 # Permissões mínimas (INTERNET é essencial se você busca dados online)
-android.permissions = INTERNET, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_DATA_SYNC, WAKE_LOCK, RECEIVE_BOOT_COMPLETED
+android.permissions = INTERNET, POST_NOTIFICATIONS, FOREGROUND_SERVICE, FOREGROUND_SERVICE_DATA_SYNC, WAKE_LOCK, RECEIVE_BOOT_COMPLETED, REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
 android.add_src = android_src
 
 # NOTE:

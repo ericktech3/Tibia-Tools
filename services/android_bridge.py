@@ -322,6 +322,10 @@ class AndroidBridgeService:
             self.app._bg_service = True
             self.app._fav_monitor_last_start_ok_ts = time.monotonic()
             self._log_service_event(f"start ok ({reason})")
+            try:
+                self.request_ignore_battery_optimizations()
+            except Exception:
+                pass
             return True
         except Exception:
             log_current_exception(prefix="AndroidBridgeService.start_fav_monitor_service")
@@ -329,6 +333,43 @@ class AndroidBridgeService:
             return False
         finally:
             self.app._fav_monitor_starting = False
+
+    def request_ignore_battery_optimizations(self) -> bool:
+        """Pede (uma vez) para o Android não aplicar economia de bateria ao app.
+
+        Sem isso, alguns aparelhos (ex.: Samsung) congelam o monitoramento
+        quando o app é fechado. Retorna True se já está liberado.
+        """
+        if not self.is_android() or self.android_sdk_int() < 23:
+            return True
+        try:
+            from jnius import autoclass  # type: ignore
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            Context = autoclass('android.content.Context')
+            ctx = PythonActivity.mActivity
+            pkg = ctx.getPackageName()
+            pm = ctx.getSystemService(Context.POWER_SERVICE)
+            if pm.isIgnoringBatteryOptimizations(pkg):
+                return True
+            flag = os.path.join(str(getattr(self.app, "data_dir", "") or ""), ".battery_prompt_shown")
+            if os.path.exists(flag):
+                return False
+            try:
+                with open(flag, "w", encoding="utf-8") as f:
+                    f.write(str(int(time.time())))
+            except Exception:
+                pass
+            Intent = autoclass('android.content.Intent')
+            Settings = autoclass('android.provider.Settings')
+            Uri = autoclass('android.net.Uri')
+            intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            intent.setData(Uri.parse("package:" + pkg))
+            ctx.startActivity(intent)
+            self._log_service_event("battery optimization prompt shown")
+            return False
+        except Exception:
+            log_current_exception(prefix="AndroidBridgeService.request_ignore_battery_optimizations")
+            return False
 
     def stop_fav_monitor_service(self, reason: str = "manual"):
         if not self.is_android():

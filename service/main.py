@@ -117,6 +117,51 @@ def _android_notify(
     except Exception as e:
         _append_crash_log(f"notify fail: {e}")
 
+_WAKE_LOCK = None
+
+def _android_keep_alive() -> None:
+    """Pede ao Android para manter o serviço vivo quando o app é fechado.
+
+    - setAutoRestartService(True): o python-for-android passa a usar START_STICKY
+      e NÃO encerra o serviço quando o app é deslizado para fora dos recentes
+      (o padrão dele era parar o serviço junto com o app).
+    - WakeLock parcial: impede que o processador "durma" no meio do intervalo,
+      o que congelava o loop com a tela desligada.
+    """
+    global _WAKE_LOCK
+    try:
+        from jnius import autoclass
+        PythonService = autoclass("org.kivy.android.PythonService")
+        service = PythonService.mService
+        try:
+            service.setAutoRestartService(True)
+        except Exception as e:
+            _append_crash_log(f"autorestart fail: {e}")
+        if _WAKE_LOCK is None:
+            Context = autoclass("android.content.Context")
+            PowerManager = autoclass("android.os.PowerManager")
+            pm = service.getSystemService(Context.POWER_SERVICE)
+            wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TibiaTools:favwatch")
+            wl.setReferenceCounted(False)
+            wl.acquire()
+            _WAKE_LOCK = wl
+    except Exception as e:
+        _append_crash_log(f"keep alive fail: {e}")
+
+def _android_release_keep_alive() -> None:
+    global _WAKE_LOCK
+    try:
+        if _WAKE_LOCK is not None and _WAKE_LOCK.isHeld():
+            _WAKE_LOCK.release()
+    except Exception:
+        pass
+    _WAKE_LOCK = None
+    try:
+        from jnius import autoclass
+        autoclass("org.kivy.android.PythonService").mService.setAutoRestartService(False)
+    except Exception:
+        pass
+
 def _android_start_foreground(title: str, text: str, notif_id: int = 1001):
     """Garante uma notificação fixa (foreground) com texto visível.
     Alguns devices mostram a notificação do serviço em branco se não chamarmos startForeground manualmente.
@@ -270,6 +315,7 @@ def main():
         _android_start_foreground('Tibia Tools', 'Inicializando monitor...', notif_id=1001)
     except Exception:
         pass
+    _android_keep_alive()
 
     try:
         from core import fgs_budget  # limite de 6 h/24 h do Android 15+
@@ -295,6 +341,7 @@ def main():
                     except Exception:
                         pass
                     _append_crash_log("monitor pausado: limite de 6h/24h do Android atingido")
+                    _android_release_keep_alive()
                     _android_stop_self()
                     return
             st = state_mod.load_state(data_dir)
@@ -309,6 +356,7 @@ def main():
                 except Exception:
                     pass
                 try:
+                    _android_release_keep_alive()
                     _android_stop_self()
                 except Exception:
                     pass
